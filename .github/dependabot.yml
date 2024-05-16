@@ -1,0 +1,20 @@
+# Describes the Dependabot configurations to use for this project. This will automatically open PRs
+# for library upgrades whenever a library can be upgraded or patched.
+#
+# This file will be parsed only on the main project and based on the description outlined here:
+#   https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# See more information on the job that runs to perform this check, navigate to this link in the
+# Github project:
+#   Insights -> Dependency graph -> Dependabot
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+      
