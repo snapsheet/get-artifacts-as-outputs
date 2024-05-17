@@ -284,11 +284,22 @@ export class Consolidator {
    * Sourced from https://stackoverflow.com/questions/55374755/node-js-axios-download-file-stream-and-writefile
    */
   async downloadFile(fileUrl: string, outputLocationPath: string) {
-    const writer = fs.createWriteStream(outputLocationPath);
-    Axios.get(fileUrl, {responseType: "stream"}).then((response) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      return new Promise((_resolve, _reject) => response.data.pipe(writer));
-    }).finally(() => writer.close());
+    return Axios
+      .get(fileUrl, {responseType: "stream"})
+      .then((response) => {
+        const outFile = fs.createWriteStream(outputLocationPath);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        return new Promise((_resolve, _reject) => {
+          response.data.pipe(outFile);
+          outFile.close();
+        });
+      })
+      .finally(() => {
+        core.debug("Download Complete");
+      })
+      .catch((error) => {
+        core.debug(`Download Resulted in Error: ${error}`);
+      });
   }
 
   /**

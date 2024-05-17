@@ -7,6 +7,7 @@ import { WorkflowContentFactory } from "./factories/workflowContent";
 import { ListJobsForWorkflowRunFactory } from "./factories/octokit/listJobsForWorkflowRunResponse";
 import { WorkflowJobFactory } from "./factories/octokit/workflowJob";
 import { DownloadArtifactResponseFactory } from "./factories/octokit/downloadArtifactResponse";
+import path from "path";
 import core from "@actions/core";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
@@ -381,10 +382,11 @@ describe("Consolidator", () => {
 
   describe("downloadFile", () => {
     it("downloads the file from the given URL", async () => {
-      const dataStream = fs.createReadStream(__filename);
+      const writeSpy = jest.spyOn(fs, "createWriteStream");
+      const dataStream = fs.createReadStream(path.join(__dirname, "fixtures", "artifact.zip"));
       mockAdapter.onAny().reply(200, dataStream);
       await subject.downloadFile("https://somesite.org/some/path", "save/file/here.zip");
-      // and not result in error
+      expect(writeSpy).toHaveBeenCalled();
     });
   });
 
