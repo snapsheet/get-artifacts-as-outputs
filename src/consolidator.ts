@@ -192,7 +192,9 @@ export class Consolidator {
     workflowJobs: JobInfo[]
   ): JobInfo[] {
     const config = this.schema.jobs[jobName];
-    return workflowJobs.filter((job) => new RegExp(`^${config.name} \\(`).test(job.name));
+    return workflowJobs.filter((job) =>
+      new RegExp(`^${config.name} \\(`).test(job.name)
+    );
   }
 
   /**
@@ -250,12 +252,14 @@ export class Consolidator {
     core.debug(JSON.stringify(response));
 
     // download the zip file for the artifact
-    const zipFilePath = tmpFile.name;
-    await this.downloadFile(response.url, zipFilePath);
-    core.debug(`Artifact Zip File Saved To: ${zipFilePath}`);
+    await this.downloadFile(response.url, tmpFile.name);
+    core.debug(`Artifact Zip File Saved To: ${tmpFile.name}`);
 
     // extract the artifact to a temporary directory
-    await this.unzipFiles(zipFilePath, tmpDir.name);
+    await fs
+      .createReadStream(tmpFile.name)
+      .pipe(unzipper.Extract({ path: tmpDir.name }))
+      .promise();
     core.debug(
       `Artifact Files Extracted To ${tmpDir.name}: ${JSON.stringify(
         fs.readdirSync(tmpDir.name)
@@ -271,10 +275,13 @@ export class Consolidator {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readOutputs(artifactDirectoryPath: string): any {
     const outputFilename = core.getInput("output_filename");
-    const readData = fs.readFileSync(`${artifactDirectoryPath}/${outputFilename}`, {
-      encoding: "utf8",
-      flag: "r"
-    });
+    const readData = fs.readFileSync(
+      `${artifactDirectoryPath}/${outputFilename}`,
+      {
+        encoding: "utf8",
+        flag: "r"
+      }
+    );
     core.debug(`Output File Contents: ${readData}`);
     return JSON.parse(readData);
   }
@@ -284,22 +291,30 @@ export class Consolidator {
    *
    * Sourced from https://stackoverflow.com/questions/55374755/node-js-axios-download-file-stream-and-writefile
    */
-  async downloadFile(fileUrl: string, destination: string) {
-    return Axios
-      .get(fileUrl, {responseType: "stream"})
-      .then((response) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        return new Promise((_resolve, _reject) => response.data.pipe(destination));
-      });
-  }
+  async downloadFile(fileUrl: string, outputLocationPath: string) {
+    const writer = fs.createWriteStream(outputLocationPath);
 
-  /**
-   * Unzip files into the given destination. If the destination directory does not exist, it will be created.
-   */
-  async unzipFiles(zipFilePath: string, destination: string) {
-    return fs
-      .createReadStream(zipFilePath)
-      .pipe(unzipper.Extract({ path: destination }))
-      .promise();
+    return Axios({
+      method: "get",
+      url: fileUrl,
+      responseType: "stream"
+    }).then((response) => {
+      return new Promise((resolve, reject) => {
+        response.data.pipe(writer);
+        let error: Error | null = null;
+        writer.on("error", (err) => {
+          error = err;
+          writer.close();
+          reject(err);
+        });
+        writer.on("close", () => {
+          if (!error) {
+            resolve(true);
+          }
+          //no need to call the reject here, as it will have been called in the
+          //'error' stream;
+        });
+      });
+    });
   }
 }
