@@ -258,6 +258,7 @@ export class Consolidator {
       .createReadStream(tmpFile.name)
       .pipe(unzipper.Extract({ path: tmpDir.name }))
       .promise();
+
     core.debug(
       `Artifact Files Extracted To ${tmpDir.name}: ${JSON.stringify(
         fs.readdirSync(tmpDir.name)
@@ -290,11 +291,7 @@ export class Consolidator {
     const writer = fs.createWriteStream(outputLocationPath);
     Axios.get(fileUrl, {responseType: "stream"}).then((response) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      return new Promise((_resolve, _reject) => {
-        const result = response.data.pipe(writer);
-        writer.close();
-        return result;
-      });
-    });
+      return new Promise((_resolve, _reject) => response.data.pipe(writer));
+    }).finally(() => writer.close());
   }
 }
