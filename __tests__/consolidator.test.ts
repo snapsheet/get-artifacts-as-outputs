@@ -11,7 +11,6 @@ import core from "@actions/core";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
 import fs from "fs";
-import path from "path";
 import unzipper from "unzipper";
 import { ArtifactInfo } from "../src/artifactInfo";
 import { JobInfo } from "../src/jobInfo";
@@ -290,24 +289,19 @@ describe("Consolidator", () => {
           name: "Some Verbose Job Name (matrix3)"
         }),
         WorkflowJobFactory.generate({
-          name: "Some Verbose Job Name (matrix4)"
+          name: "Some Verbose Job Name"
         }),
-        WorkflowJobFactory.generate({
-          name: "Some Verbose Job Name (matrix5)"
-        }),
-        WorkflowJobFactory.generate({ name: "Some other unrelated job" }),
-        WorkflowJobFactory.generate({ name: "another unrelated job" }),
         WorkflowJobFactory.generate({
           name: "Some Verbose Job Name But Not The Same (matrix1)"
         }),
         WorkflowJobFactory.generate({
-          name: "Some Verbose Job Name But Not The Same (matrix2)"
+          name: "Some Verbose Job Name (Also Not The Same) (matrix2)"
         }),
         WorkflowJobFactory.generate({
-          name: "Some Verbose Job Name But Not The Same (matrix3)"
+          name: "Some Verbose Job Name (notamatrix3) (matrix2)"
         })
       ]);
-      expect(results.length).toEqual(5);
+      expect(results.length).toEqual(3);
     });
   });
 

@@ -193,7 +193,7 @@ export class Consolidator {
   ): JobInfo[] {
     const config = this.schema.jobs[jobName];
     return workflowJobs.filter((job) =>
-      new RegExp(`^${config.name} \\(`).test(job.name)
+      new RegExp(`^${config.name} \\(\\S+\\)$`).test(job.name)
     );
   }
 
