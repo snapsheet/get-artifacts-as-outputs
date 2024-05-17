@@ -250,11 +250,12 @@ export class Consolidator {
     core.debug(JSON.stringify(response));
 
     // download the zip file for the artifact
-    await this.downloadFile(response.url, tmpFile.name);
-    core.debug(`Artifact Zip File Saved To: ${tmpFile.name}`);
+    const zipFilePath = tmpFile.name;
+    await this.downloadFile(response.url, zipFilePath);
+    core.debug(`Artifact Zip File Saved To: ${zipFilePath}`);
 
     // extract the artifact to a temporary directory
-    this.unzipFiles(tmpFile.name, tmpDir.name);
+    this.unzipFiles(zipFilePath, tmpDir.name);
     core.debug(
       `Artifact Files Extracted To ${tmpDir.name}: ${JSON.stringify(
         fs.readdirSync(tmpDir.name)
@@ -283,31 +284,21 @@ export class Consolidator {
    *
    * Sourced from https://stackoverflow.com/questions/55374755/node-js-axios-download-file-stream-and-writefile
    */
-  async downloadFile(fileUrl: string, outputLocationPath: string) {
+  async downloadFile(fileUrl: string, destination: string) {
     return Axios
       .get(fileUrl, {responseType: "stream"})
       .then((response) => {
-        const outFile = fs.createWriteStream(outputLocationPath);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        return new Promise((_resolve, _reject) => {
-          response.data.pipe(outFile);
-          outFile.close();
-        });
-      })
-      .finally(() => {
-        core.debug("Download Complete");
-      })
-      .catch((error) => {
-        core.debug(`Download Resulted in Error: ${error}`);
+        return new Promise((_resolve, _reject) => response.data.pipe(destination));
       });
   }
 
   /**
    * Unzip files into the given destination. If the destination directory does not exist, it will be created.
    */
-  unzipFiles(source: string, destination: string) {
+  unzipFiles(zipFilePath: string, destination: string) {
     return fs
-      .createReadStream(source)
-      .pipe(unzipper.Extract({ path: destination }));
+      .createReadStream(zipFilePath)
+      .pipe(unzipper.Extract({ path: destination })).promise();
   }
 }

@@ -12,6 +12,7 @@ import core from "@actions/core";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
 import fs from "fs";
+import tmp from "tmp";
 import unzipper from "unzipper";
 import { ArtifactInfo } from "../src/artifactInfo";
 import { JobInfo } from "../src/jobInfo";
@@ -382,10 +383,11 @@ describe("Consolidator", () => {
 
   describe("downloadFile", () => {
     it("downloads the file from the given URL", async () => {
+      const tmpFile = tmp.fileSync();
       const writeSpy = jest.spyOn(fs, "createWriteStream");
       const dataStream = fs.createReadStream(path.join(__dirname, "fixtures", "artifact.zip"));
       mockAdapter.onAny().reply(200, dataStream);
-      await subject.downloadFile("https://somesite.org/some/path", "save/file/here.zip");
+      await subject.downloadFile("https://somesite.org/some/path", tmpFile.name);
       expect(writeSpy).toHaveBeenCalled();
     });
   });
