@@ -1,7 +1,5 @@
 import * as core from "@actions/core";
 
-// jest.mock("@actions/core");
-
 describe("index run", () => {
   let runSpy: jest.SpyInstance;
 

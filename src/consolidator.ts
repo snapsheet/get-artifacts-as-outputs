@@ -290,7 +290,11 @@ export class Consolidator {
     const writer = fs.createWriteStream(outputLocationPath);
     Axios.get(fileUrl, {responseType: "stream"}).then((response) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      return new Promise((_resolve, _reject) => response.data.pipe(writer));
+      return new Promise((_resolve, _reject) => {
+        const result = response.data.pipe(writer);
+        writer.close();
+        return result;
+      });
     });
   }
 }
