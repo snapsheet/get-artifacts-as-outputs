@@ -254,11 +254,7 @@ export class Consolidator {
     core.debug(`Artifact Zip File Saved To: ${tmpFile.name}`);
 
     // extract the artifact to a temporary directory
-    await fs
-      .createReadStream(tmpFile.name)
-      .pipe(unzipper.Extract({ path: tmpDir.name }))
-      .promise();
-
+    this.unzipFiles(tmpFile.name, tmpDir.name);
     core.debug(
       `Artifact Files Extracted To ${tmpDir.name}: ${JSON.stringify(
         fs.readdirSync(tmpDir.name)
@@ -293,5 +289,14 @@ export class Consolidator {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       return new Promise((_resolve, _reject) => response.data.pipe(writer));
     }).finally(() => writer.close());
+  }
+
+  /**
+   * Unzip files into the given destination. If the destination directory does not exist, it will be created.
+   */
+  unzipFiles(source: string, destination: string) {
+    return fs
+      .createReadStream(source)
+      .pipe(unzipper.Extract({ path: destination }));
   }
 }
