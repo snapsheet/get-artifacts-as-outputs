@@ -54,7 +54,7 @@ export class Consolidator {
   async run() {
     this.schema = await this.getWorkflowSchema();
     this.artifacts = await this.getRunArtifacts();
-    // const results: { [n: string]: JobInfo[] } = {};
+
     for (const jobName of this.schema.jobs[this.context.job].needs) {
       const currentWorkflowJobs = await this.getRelevantWorkflowJobs(
         jobName,
