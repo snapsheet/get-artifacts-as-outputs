@@ -1,0 +1,12 @@
+name: Get Artifacts as Job Outputs
+description: Get GitHub artifacts and save them as job outputs.
+author: Snapsheet
+
+inputs:
+  output_filename:
+    description: Name of the file that jobs outputs have been saved into.
+    required: true
+
+runs:
+  using: node20
+  main: dist/index.js
