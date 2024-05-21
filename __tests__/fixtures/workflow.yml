@@ -1,0 +1,156 @@
+name: Run a CDKTF Diff
+run-name: cdktf diff (${{ inputs.ref }})
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch/Commit/Tag to use
+        default: main
+        type: string
+      terraform_version:
+        description: The version of Terraform to use
+        default: 1.8.0
+        required: false
+
+jobs:
+  default_setup:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    outputs:
+      stacks: ${{ steps.synth.outputs.stacks }}
+    steps:
+      - uses: snapsheet/cdktf-synth@0.1.0
+        id: synth
+        with:
+          ref: ${{ github.ref_name }}
+          terraform_version: ${{ inputs.terraform_version }}
+          working_directory: ./cdktf
+
+  ref_setup:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    outputs:
+      stacks: ${{ steps.synth.outputs.stacks }}
+    steps:
+      - uses: snapsheet/cdktf-synth@0.1.0
+        id: synth
+        with:
+          ref: ${{ inputs.ref }}
+          terraform_version: ${{ inputs.terraform_version }}
+          working_directory: ./cdktf
+
+  ref_with_error_setup:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    outputs:
+      stacks: ${{ steps.synth.outputs.stacks }}
+    steps:
+      - uses: snapsheet/cdktf-synth@0.1.0
+        id: synth
+        with:
+          ref: ${{ inputs.ref }}
+          terraform_version: ${{ inputs.terraform_version }}
+          working_directory: ./cdktf
+
+  diffs_for_default:
+    name: Diffs for Default Branch
+    needs: [default_setup]
+    strategy:
+      fail-fast: false
+      matrix: 
+        name: ${{ fromJson(needs.default_setup.outputs.stacks) }}
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    defaults:
+      run:
+        working-directory: ./cdktf
+    steps:
+      - name: "${{ matrix.name }}: Diff for ${{ github.ref_name }}"
+        uses: snapsheet/cdktf-diff@0.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          job_name: Diffs for Default Branch (${{ matrix.name }})
+          output_filename: outputs.json
+          ref: ${{ github.ref_name }}
+          stack: ${{ matrix.name }}
+          terraform_version: ${{ inputs.terraform_version }}
+          stub_output_file: ../tmp/tinker-ci-testing-qa1-no-changes.log
+          working_directory: ./cdktf
+
+  diffs_for_ref:
+    name: Diffs for Ref
+    needs: [ref_setup]
+    strategy:
+      fail-fast: false
+      matrix: 
+        name: ${{ fromJson(needs.ref_setup.outputs.stacks) }}
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    defaults:
+      run:
+        working-directory: ./cdktf
+    steps:
+      - name: "${{ matrix.name }}: Diff for ${{ inputs.ref }}"
+        uses: snapsheet/cdktf-diff@0.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          job_name: Diffs for Ref (${{ matrix.name }})
+          output_filename: outputs.json
+          ref: ${{ inputs.ref }}
+          stack: ${{ matrix.name }}
+          terraform_version: ${{ inputs.terraform_version }}
+          stub_output_file: ../tmp/tinker-ci-testing-qa1-diff.log
+          working_directory: ./cdktf
+
+  diffs_for_ref_with_error:
+    name: Diffs for Ref (with error)
+    needs: [ref_with_error_setup]
+    strategy:
+      fail-fast: false
+      matrix: 
+        name: ${{ fromJson(needs.ref_with_error_setup.outputs.stacks) }}
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    defaults:
+      run:
+        working-directory: ./cdktf
+    steps:
+      - name: "${{ matrix.name }}: Diff for ${{ inputs.ref }}"
+        uses: snapsheet/cdktf-diff@0.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          job_name: Diffs for Ref (with error) (${{ matrix.name }})
+          output_filename: outputs.json
+          ref: ${{ inputs.ref }}
+          stack: ${{ matrix.name }}
+          terraform_version: ${{ inputs.terraform_version }}
+          stub_output_file: ../tmp/tinker-ci-testing-qa1-error.log
+          working_directory: ./cdktf
+
+  generate_output:
+    name: Generate Output
+    needs: [diffs_for_default, diffs_for_ref, diffs_for_ref_with_error]
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - id: previous_jobs
+        uses: snapsheet/get-artifacts-as-outputs@0.1.0
+
+      - name: Generate Outputs
+        id: markdown
+        run: |
+          echo "## Diff for \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.previous_jobs.outputs.diffs_for_default }}' | jq -r 'keys[] as $k | "* [\(.[$k] | .stack)](\(.[$k] | .html_url)): \(.[$k] | .summary)"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Diff for \`${{ inputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.previous_jobs.outputs.diffs_for_ref }}' | jq -r 'keys[] as $k | "* [\(.[$k] | .stack)](\(.[$k] | .html_url)): \(.[$k] | .summary)"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Diff for \`${{ inputs.ref }}\` (with error)" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.previous_jobs.outputs.diffs_for_ref_with_error }}' | jq -r 'keys[] as $k | "* [\(.[$k] | .stack)](\(.[$k] | .html_url)): \(.[$k] | .summary)"' >> $GITHUB_STEP_SUMMARY
