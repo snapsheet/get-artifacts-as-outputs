@@ -42,7 +42,8 @@ export class Consolidator {
   commonQueryParams() {
     return {
       owner: this.context.payload.organization.login,
-      repo: `${this.context.payload.repository?.name}`
+      repo: `${this.context.payload.repository?.name}`,
+      per_page: 100
     };
   }
 
