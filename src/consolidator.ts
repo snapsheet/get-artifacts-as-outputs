@@ -62,6 +62,7 @@ export class Consolidator {
         jobName,
         this.context.runId
       );
+      core.info(`Current workflow jobs: ${JSON.stringify(currentWorkflowJobs)}`);
       const lastRanWorkflows = await this.getLastRanWorkflowJobs(
         jobName,
         currentWorkflowJobs
