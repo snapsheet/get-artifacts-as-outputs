@@ -32,8 +32,8 @@ export class Consolidator {
     this.artifacts = [];
     this.octokit = github.getOctokit(`${process.env.GITHUB_TOKEN}`);
     this.context = github.context;
-    core.debug("Context:");
-    core.debug(JSON.stringify(this.context));
+    core.info("Context:");
+    core.info(JSON.stringify(this.context));
   }
 
   /**
@@ -81,8 +81,8 @@ export class Consolidator {
       path: this.context.payload.workflow,
       ref: this.context.payload.ref
     });
-    core.debug("getContent");
-    core.debug(JSON.stringify(response));
+    core.info("getContent");
+    core.info(JSON.stringify(response));
 
     const schema = YAML.parse(
       Buffer.from(response.data.content, "base64").toString("utf8")
@@ -147,6 +147,35 @@ export class Consolidator {
   /**
    * Get all jobs running within this workflow. An optional attempt number can be passed.
    */
+  // async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
+  //   const queryParams = {
+  //     ...this.commonQueryParams(),
+  //     run_id,
+  //   };
+  //     if (attempt_number) {
+  //       core.info("Using listJobsForWorkflowRunAttempt with pagination");
+  //       const jobs = await this.octokit.paginate(
+  //         this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
+  //         {
+  //           ...queryParams,
+  //           attempt_number
+  //         }
+  //       );
+  //       core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+  //       core.info(JSON.stringify(jobs));
+  //       return jobs;
+  //     } else {
+  //       core.info("Using listJobsForWorkflowRun with pagination");
+  //       const jobs = await this.octokit.paginate(
+  //         this.octokit.rest.actions.listJobsForWorkflowRun,
+  //         queryParams
+  //     );
+  //     core.info(`Found ${jobs.length} jobs for workflow run`);
+  //     core.info(JSON.stringify(jobs));
+  //     return jobs;
+  //   }
+  // }
+
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
     let workflowJobs = null;
 
@@ -157,15 +186,15 @@ export class Consolidator {
           run_id,
           attempt_number
         });
-      core.debug("listJobsForWorkflowRunAttempt");
-      core.debug(JSON.stringify(workflowJobs));
+      core.info("listJobsForWorkflowRunAttempt");
+      core.info(JSON.stringify(workflowJobs));
     } else {
       workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
         ...this.commonQueryParams(),
         run_id
       });
-      core.debug("listJobsForWorkflowRun");
-      core.debug(JSON.stringify(workflowJobs));
+      core.info("listJobsForWorkflowRun");
+      core.info(JSON.stringify(workflowJobs));
     }
 
     return workflowJobs.data.jobs;
@@ -179,8 +208,8 @@ export class Consolidator {
       ...this.commonQueryParams(),
       run_id: this.context.runId
     });
-    core.debug("listWorkflowRunArtifacts");
-    core.debug(JSON.stringify(response));
+    core.info("listWorkflowRunArtifacts");
+    core.info(JSON.stringify(response));
 
     return response.data.artifacts;
   }
@@ -215,7 +244,7 @@ export class Consolidator {
       )
     );
 
-    core.debug(
+    core.info(
       `Found Artifacts (${JSON.stringify(
         Object.values(jobArtifacts).map((a) => a.id)
       )})`
@@ -229,7 +258,7 @@ export class Consolidator {
       const artifactPath = await this.downloadArtifactFile(artifact.id);
       jobResults[jobName] = this.readOutputs(artifactPath);
     }
-    core.debug(`Job Outputs: ${JSON.stringify(jobResults)}`);
+    core.info(`Job Outputs: ${JSON.stringify(jobResults)}`);
 
     // return the data structure as an array of objects
     return jobResults;
@@ -249,19 +278,19 @@ export class Consolidator {
       artifact_id: artifactId,
       archive_format: "zip"
     });
-    core.debug("Artifact URL Info:");
-    core.debug(JSON.stringify(response));
+    core.info("Artifact URL Info:");
+    core.info(JSON.stringify(response));
 
     // download the zip file for the artifact
     await this.downloadFile(response.url, tmpFile.name);
-    core.debug(`Artifact Zip File Saved To: ${tmpFile.name}`);
+    core.info(`Artifact Zip File Saved To: ${tmpFile.name}`);
 
     // extract the artifact to a temporary directory
     await fs
       .createReadStream(tmpFile.name)
       .pipe(unzipper.Extract({ path: tmpDir.name }))
       .promise();
-    core.debug(
+    core.info(
       `Artifact Files Extracted To ${tmpDir.name}: ${JSON.stringify(
         fs.readdirSync(tmpDir.name)
       )}`
@@ -283,7 +312,7 @@ export class Consolidator {
         flag: "r"
       }
     );
-    core.debug(`Output File Contents: ${readData}`);
+    core.info(`Output File Contents: ${readData}`);
     return JSON.parse(readData);
   }
 
