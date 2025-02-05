@@ -86,7 +86,7 @@ npm install
 # Build the project
 npm run build
 
-# Run tests
+# The project uses Jest for testing and maintains 100% line coverage (except for index.ts). Run tests with:
 npm test
 
 # To create a distribution branch for testing: 
@@ -101,14 +101,6 @@ npm run dist-branch
 - `__tests__/` - Test files and fixtures
 - `dist/` - Compiled output (generated)
 
-
-### Testing
-
-The project uses Jest for testing and maintains 100% line coverage (except for index.ts). Run tests with:
-
-```bash
-npm test
-```
 
 ## License
 
