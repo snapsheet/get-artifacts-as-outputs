@@ -83,7 +83,7 @@ export class Consolidator {
       ref: this.context.payload.ref
     });
     core.info("getContent");
-    core.info(JSON.stringify(response));
+    core.info(JSON.stringify(response.data.content));
 
     const schema = YAML.parse(
       Buffer.from(response.data.content, "base64").toString("utf8")
