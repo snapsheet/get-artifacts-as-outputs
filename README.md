@@ -33,30 +33,51 @@ This action helps you consolidate outputs from multiple jobs in a GitHub Actions
 
 ```yaml
 jobs:
-  job1:
+  generate_results:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: 
+        name: ["first", "second", "third"]
     steps:
       - uses: actions/checkout@v4
-      - run: echo '{"result": "success"}' > outputs.json
-      - uses: actions/upload-artifact@v4
+      - run: echo '{"result": "${{ matrix.name }} was successful"}' > outputs.json
+      - name: Gather Results
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.job }}
+          name: ${{ matrix.name }}
           path: outputs.json
 
-  job2:
-    needs: [job1]
+  gather_output:
+    needs: [generate_results]
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - id: get_outputs
+      - id: previous_jobs
         uses: snapsheet/get-artifacts-as-outputs@0.1.1
         with:
           output_filename: outputs.json
-      
-      # Access the outputs from job1
-      - run: |
-          echo "Job1 results: ${{ steps.get_outputs.outputs.job1 }}"
+        # ...when this job's outputs are accessed, it will have the following format:
+        # {
+        #   "first": { "summary": "first was successful" },
+        #   "second": { "summary": "second was successful" },
+        #   "third": { "summary": "third was successful" }
+        # }
+
+      - name: Generate Outputs
+        id: markdown
+        run: |
+          echo '${{ steps.previous_jobs.outputs.generate_results }}' | jq -r 'keys[] as $k | "\($k) results: \(.[$k] | .summary)"'
+        # (will print out the following)
+        # first results: first was successful
+        # second results: second was successful
+        # third results: third was successful
 ```
 
+### Dependencies
+
+This project relies on having a GITHUB_TOKEN defined in the environment variables, with permission to read artifacts for this repository.
 
 ### Inputs
 
@@ -64,6 +85,18 @@ jobs:
 |-------|-------------|----------|
 | `output_filename` | Name of the file that contains the job outputs | Yes |
 
+### Outputs
+
+A JSON object, where each key-value pair has a key corresponding to the job name, and value representing the content of the file found in the artifact(s), read as strings.
+
+#### Example
+```json
+{
+  "Some Job (1)": "{\"summary\": \"it was a success\" }",
+  "Some Job (2)": "{\"summary\": \"somewhat of a success\" }",
+  "Some Job (3)": "{\"summary\": \"total failure\" }"
+}
+```
 
 ## How It Works
 1. The action identifies all jobs that the current job depends on (specified in `needs`)
@@ -72,10 +105,6 @@ jobs:
    - Downloads and extracts the artifact contents
    - Reads the specified output file
    - Makes the contents available as a job output with the same name as the dependent job
-
-This allows you to access data from previous jobs using the standard GitHub Actions outputs syntax:
-
-
 
 ### Development
 
@@ -118,4 +147,4 @@ MIT License - see LICENSE file for details.
 
 
 ## References
-For more examples, see the test workflow:
+For more examples, see the test workflow in `__tests__/fixtures/workflow.yml`.
