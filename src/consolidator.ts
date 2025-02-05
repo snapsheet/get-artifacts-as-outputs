@@ -67,6 +67,7 @@ export class Consolidator {
         jobName,
         currentWorkflowJobs
       );
+      core.info(`last ran workflow jobs: ${JSON.stringify(lastRanWorkflows)}`);
       const jobOutputs = await this.getJobOutputs(lastRanWorkflows);
       core.setOutput(jobName, JSON.stringify(jobOutputs));
     }
