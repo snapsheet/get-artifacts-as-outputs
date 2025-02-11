@@ -79,6 +79,7 @@ export class Consolidator {
    * YAML file of the current branch and return a data structure.
    */
   async getWorkflowSchema() {
+    core.startGroup("getWorkflowSchema");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await this.octokit.rest.repos.getContent({
       ...this.commonQueryParams(),
@@ -91,7 +92,7 @@ export class Consolidator {
     const schema = YAML.parse(
       Buffer.from(response.data.content, "base64").toString("utf8")
     );
-
+    core.endGroup();
     return schema;
   }
 
@@ -104,6 +105,7 @@ export class Consolidator {
     jobName: string,
     workflowJobs: JobInfo[]
   ): Promise<JobInfo[]> {
+    core.startGroup("getLastRanWorkflowJobs");
     if (workflowJobs.length == 0) return [];
 
     // runAttempt should be the same across jobs
@@ -134,6 +136,7 @@ export class Consolidator {
     return jobsToReturn.concat(
       await this.getLastRanWorkflowJobs(jobName, moreJobs)
     );
+    core.endGroup();
   }
 
   /**
@@ -181,6 +184,7 @@ export class Consolidator {
   // }
 
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
+    core.startGroup("listJobsForWorkflowRun");
     let workflowJobs = null;
 
     if (attempt_number) {
@@ -197,8 +201,8 @@ export class Consolidator {
         ...this.commonQueryParams(),
         run_id
       });
-      core.info("listJobsForWorkflowRun");
       core.info(JSON.stringify(workflowJobs));
+      core.endGroup();
     }
 
     return workflowJobs.data.jobs;
@@ -212,8 +216,9 @@ export class Consolidator {
       ...this.commonQueryParams(),
       run_id: this.context.runId
     });
-    core.info("listWorkflowRunArtifacts");
+    core.startGroup("listWorkflowRunArtifacts");
     core.info(JSON.stringify(response));
+    core.endGroup();
 
     return response.data.artifacts;
   }
@@ -235,19 +240,16 @@ export class Consolidator {
    * Gather the outputs for the job runs and put them into an array.
    */
   async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
+    core.startGroup("getJobOutputs");
     // create a data structure with the job name and associated artifact
     const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
       new Map(
         jobDetails
-          .map((job) => {
-            // Extract the matrix value from the job name (e.g. "generate_results (first)" -> "first")
-            const matrixValue = job.name.match(/\((\w+)\)$/)?.[1];
-            return [
-              job.name,
-              this.artifacts.find((a) => a.name === matrixValue)
-            ];
-          })
-          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] 
+          .map((job) => [
+            job.name,
+            this.artifacts.find((a) => a.name == job.id.toString())
+          ])
+          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
       )
     );
 
@@ -266,7 +268,7 @@ export class Consolidator {
       jobResults[jobName] = this.readOutputs(artifactPath);
     }
     core.info(`Job Outputs: ${JSON.stringify(jobResults)}`);
-
+    core.endGroup();
     // return the data structure as an array of objects
     return jobResults;
   }
@@ -285,12 +287,14 @@ export class Consolidator {
       artifact_id: artifactId,
       archive_format: "zip"
     });
+    core.startGroup("downloadArtifact");
     core.info("Artifact URL Info:");
     core.info(JSON.stringify(response));
 
     // download the zip file for the artifact
     await this.downloadFile(response.url, tmpFile.name);
     core.info(`Artifact Zip File Saved To: ${tmpFile.name}`);
+
 
     // extract the artifact to a temporary directory
     await fs
@@ -302,7 +306,7 @@ export class Consolidator {
         fs.readdirSync(tmpDir.name)
       )}`
     );
-
+    core.endGroup();
     return tmpDir.name;
   }
 
