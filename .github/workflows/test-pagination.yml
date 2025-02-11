@@ -1,0 +1,45 @@
+name: Test Pagination 2
+
+on:
+  workflow_dispatch:
+    
+permissions:
+  id-token: write   # This is required for requesting the JWT token from AWS for OIDC
+  contents: read    # This is required for actions/checkout
+  actions: read
+
+jobs:
+  generate_results:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: 
+        name: ["first", "second", "third"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "{\"summary\": \"${{ matrix.name }} was successful\"}" > outputs.json
+      - name: Gather Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: outputs.json
+
+
+  gather_output:
+    needs: [generate_results]
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - id: previous_jobs
+        uses: snapsheet/get-artifacts-as-outputs@0.1.1
+        with:
+          output_filename: outputs.json
+
+      - name: Generate Outputs
+        id: markdown
+        run: |
+          echo 'previous jobs: ${{ toJSON(steps.previous_jobs) }}'
+          echo "---"
+          echo 'previous jobs outputs: ${{ toJSON(steps.previous_jobs.outputs) }}' 
