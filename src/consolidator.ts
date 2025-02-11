@@ -218,6 +218,7 @@ export class Consolidator {
     });
     core.startGroup("listWorkflowRunArtifacts");
     core.info(JSON.stringify(response));
+    core.info(`These are the artifacts: ${JSON.stringify(response.data.artifacts)}`);
     core.endGroup();
 
     return response.data.artifacts;
