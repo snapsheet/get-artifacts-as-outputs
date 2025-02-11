@@ -225,26 +225,29 @@ export class Consolidator {
     jobName: string,
     workflowJobs: JobInfo[]
   ): JobInfo[] {
-    const config = this.schema.jobs[jobName];
+    // const config = this.schema.jobs[jobName];
     return workflowJobs.filter((job) =>
-      new RegExp(`^${config.name} \\(\\S+\\)$`).test(job.name)
+      new RegExp(`^${jobName}\\s+\\(\\S+\\)$`).test(job.name)
     );
   }
 
   /**
    * Gather the outputs for the job runs and put them into an array.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
     // create a data structure with the job name and associated artifact
     const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
       new Map(
         jobDetails
-          .map((job) => [
-            job.name,
-            this.artifacts.find((a) => a.name == job.id.toString())
-          ])
-          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
+          .map((job) => {
+            // Extract the matrix value from the job name (e.g. "generate_results (first)" -> "first")
+            const matrixValue = job.name.match(/\((\w+)\)$/)?.[1];
+            return [
+              job.name,
+              this.artifacts.find((a) => a.name === matrixValue)
+            ];
+          })
+          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] 
       )
     );
 

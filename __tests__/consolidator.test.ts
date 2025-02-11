@@ -137,11 +137,36 @@ describe("Consolidator", () => {
   });
 
   describe("commonQueryParams", () => {
-    it("shows expected common query params", async () => {
+    it("shows expected common query params with organization", async () => {
       expect(subject.commonQueryParams()).toEqual({
-        owner: subject.context.payload.organization.login,
-        repo: subject.context.payload.repository?.name
+        owner: subject.context.payload.organization?.login || subject.context.payload.repository?.owner?.login,
+        repo: subject.context.payload.repository?.name,
+        per_page: 100
       });
+    });
+
+    it("shows expected common query params with user repository", async () => {
+      // Temporarily modify context to simulate user repository
+      const originalPayload = subject.context.payload;
+      subject.context.payload = {
+        ...subject.context.payload,
+        organization: undefined,
+        repository: {
+          ...subject.context.payload.repository,
+          owner: {
+            login: 'username'
+          }
+        }
+      };
+
+      expect(subject.commonQueryParams()).toEqual({
+        owner: 'username',
+        repo: subject.context.payload.repository?.name,
+        per_page: 100
+      });
+
+      // Restore original payload
+      subject.context.payload = originalPayload;
     });
   });
 
