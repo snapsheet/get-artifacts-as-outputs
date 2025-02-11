@@ -206,14 +206,23 @@ export class Consolidator {
    * Get all artifacts associated with this run.
    */
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
-    const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
-      ...this.commonQueryParams(),
-      run_id: this.context.runId
-    });
-    core.info(JSON.stringify(response));
-    core.info(`These are the artifacts: ${JSON.stringify(response.data.artifacts)}`);
+    // const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
+    //   ...this.commonQueryParams(),
+    //   run_id: this.context.runId
+    // });
+    // core.info(JSON.stringify(response));
+    // core.info(`These are the artifacts: ${JSON.stringify(response.data.artifacts)}`);
 
-    return response.data.artifacts;
+    // return response.data.artifacts;
+    const artifacts = await this.octokit.paginate(
+      this.octokit.rest.actions.listWorkflowRunArtifacts,
+      {
+        ...this.commonQueryParams(),
+        run_id: this.context.runId
+      }
+    );
+    core.info(`These are the artifacts: ${JSON.stringify(artifacts)}`);
+    return artifacts;
   }
 
   /**
