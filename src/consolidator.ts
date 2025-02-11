@@ -40,8 +40,9 @@ export class Consolidator {
    * Octokit query parameters that are used across multiple API requests.
    */
   commonQueryParams() {
+    const owner = this.context.payload.organization?.login || this.context.payload.repository?.owner?.login;
     return {
-      owner: this.context.payload.organization.login,
+      owner,
       repo: `${this.context.payload.repository?.name}`,
       per_page: 100
     };
