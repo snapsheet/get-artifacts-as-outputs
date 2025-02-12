@@ -226,18 +226,18 @@ export class Consolidator {
       ...this.commonQueryParams(),
       run_id,
     };
-
+    let workflowJobs = null;
     if (attempt_number) {
-      const jobs = await this.octokit.paginate(
-        'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
-        {
-          ...queryParams,
+      // Does not enter this block
+      core.info(`Using RunAttempt ${attempt_number}`);
+      workflowJobs =
+        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
+          ...this.commonQueryParams(),
+          run_id,
           attempt_number
-        }
-      );
-      core.info(`Found ${jobs.length} jobs for workflow run attempt`);
-      return jobs;
-    } else {
+        });
+      return workflowJobs.data.jobs;
+    }else {
       core.info("Using listJobsForWorkflowRun with pagination");
       const octokitPaginatedJobs = await this.octokit.paginate(
         this.octokit.rest.actions.listJobsForWorkflowRun,
