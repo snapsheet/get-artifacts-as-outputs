@@ -63,7 +63,7 @@ export class Consolidator {
         jobName,
         this.context.runId
       );
-      core.info(`Current workflow jobs: ${JSON.stringify(currentWorkflowJobs)}`);
+      // core.info(`Current workflow jobs: ${JSON.stringify(currentWorkflowJobs)}`);
       const lastRanWorkflows = await this.getLastRanWorkflowJobs(
         jobName,
         currentWorkflowJobs
@@ -165,18 +165,19 @@ export class Consolidator {
           }
         );
         // core.info(`Found ${jobs.length} jobs for workflow run attempt`);
-        core.info(JSON.stringify(jobs));
         core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+        core.info(JSON.stringify(jobs));
         return jobs;
       } else {
+
         core.info("Using listJobsForWorkflowRun with pagination");
         const jobs = await this.octokit.paginate(
           this.octokit.rest.actions.listJobsForWorkflowRun,
           queryParams
-      );
-      core.info(`Found ${jobs.length} jobs for workflow run`);
-      core.info(JSON.stringify(jobs));
-      return jobs;
+        );
+        core.info(`Found ${jobs.length} jobs for workflow run`);
+        core.info(JSON.stringify(jobs));
+        return jobs;
     }
   }
 
@@ -221,7 +222,8 @@ export class Consolidator {
         run_id: this.context.runId
       }
     );
-    core.info(`These are the artifacts: ${JSON.stringify(artifacts)}`);
+    core.info(`Total number of artifacts: ${artifacts.length}`);
+    // core.info(`These are the artifacts: ${JSON.stringify(artifacts)}`);
     return artifacts;
   }
 
