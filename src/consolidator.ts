@@ -184,6 +184,7 @@ export class Consolidator {
         });
         core.info("Without pagination");
         core.info(JSON.stringify(workflowJobs.data.jobs));
+        core.info(`TOTLA NUMBER OF JOBS WITHOUT PAGINATION: ${JSON.stringify(workflowJobs.data.jobs.length)}`);
         core.info(`--------------------------------`);
         core.info("Using listJobsForWorkflowRun with pagination");
         const jobs = await this.octokit.paginate(
