@@ -143,6 +143,7 @@ describe("Consolidator", () => {
         repo: subject.context.payload.repository?.name
       });
     });
+  });
 
   describe("getWorkflowSchema", () => {
     it("queries and parses the workflow file from the content API", async () => {
