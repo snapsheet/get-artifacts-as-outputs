@@ -306,26 +306,62 @@ export class Consolidator {
   /**
    * Gather the outputs for the job runs and put them into an array.
    */
+  // async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
+  //   // create a data structure with the job name and associated artifact
+  //   const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
+  //     new Map(
+  //       jobDetails
+  //         .map((job) => [
+  //           job.name,
+  //           this.artifacts.find((a) => a.name == job.id.toString())
+  //         ])
+  //         .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
+  //     )
+  //   );
+
+  //   core.info(
+  //     `Found Artifacts (${JSON.stringify(
+  //       Object.values(jobArtifacts).map((a) => a.id)
+  //     )})`
+  //   );
+
+  //   // need to iterate to avoid defining async callbacks
+  //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  //   const jobResults: { [k: string]: any } = {};
+  //   for (const jobName of Object.keys(jobArtifacts)) {
+  //     const artifact = jobArtifacts[jobName];
+  //     const artifactPath = await this.downloadArtifactFile(artifact.id);
+  //     jobResults[jobName] = this.readOutputs(artifactPath);
+  //   }
+  //   core.info(`Job Outputs: ${JSON.stringify(jobResults)}`);
+  //   // return the data structure as an array of objects
+  //   return jobResults;
+  // }
+
   async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
     // create a data structure with the job name and associated artifact
     const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
       new Map(
         jobDetails
-          .map((job) => [
-            job.name,
-            this.artifacts.find((a) => a.name == job.id.toString())
-          ])
-          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
+          .map((job) => {
+            // Extract the matrix value from the job name (e.g. "generate_results (first)" -> "first")
+            const matrixValue = job.name.match(/\((\w+)\)$/)?.[1];
+            return [
+              job.name,
+              this.artifacts.find((a) => a.name === matrixValue)
+            ];
+          })
+          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] 
       )
     );
-
+  
     core.info(
       `Found Artifacts (${JSON.stringify(
         Object.values(jobArtifacts).map((a) => a.id)
       )})`
     );
-
-    // need to iterate to avoid defining async callbacks
+    
+        // need to iterate to avoid defining async callbacks
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const jobResults: { [k: string]: any } = {};
     for (const jobName of Object.keys(jobArtifacts)) {
@@ -339,6 +375,7 @@ export class Consolidator {
   }
 
   /**
+   * 
    * Download and unpack an artifact to a temporary directory. Return the directory name.
    */
   async downloadArtifactFile(artifactId: number): Promise<string> {
