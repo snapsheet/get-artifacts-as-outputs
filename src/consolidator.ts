@@ -181,7 +181,7 @@ export class Consolidator {
 
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
     let workflowJobs = null;
-
+    core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
     if (attempt_number) {
       workflowJobs =
         await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
