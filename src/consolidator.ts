@@ -238,6 +238,17 @@ export class Consolidator {
         });
       return workflowJobs.data.jobs;
     }else {
+      const nonpaginatedjobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+        ...this.commonQueryParams(),
+        run_id
+      });
+      core.info(`Total number of non paginated jobs: ${nonpaginatedjobs.data.jobs.length}`);
+      core.info(`--------------------------------`);
+      //print the job names as a set
+      const nonpaginatedjobNames = new Set(nonpaginatedjobs.data.jobs.map((job) => job.name));
+      core.info(`Non Paginated Job Names: ${JSON.stringify(Array.from(nonpaginatedjobNames))}`);
+      core.info(`--------------------------------`);
+
       core.info("Using listJobsForWorkflowRun with pagination");
       const octokitPaginatedJobs = await this.octokit.paginate(
         this.octokit.rest.actions.listJobsForWorkflowRun,
