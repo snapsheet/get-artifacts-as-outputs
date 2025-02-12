@@ -150,57 +150,57 @@ export class Consolidator {
   /**
    * Get all jobs running within this workflow. An optional attempt number can be passed.
    */
-  // async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
-  //   const queryParams = {
-  //     ...this.commonQueryParams(),
-  //     run_id,
-  //   };
-  //     if (attempt_number) {
-  //       core.info("Using listJobsForWorkflowRunAttempt with pagination");
-  //       const jobs = await this.octokit.paginate(
-  //         this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
-  //         {
-  //           ...queryParams,
-  //           attempt_number
-  //         }
-  //       );
-  //       core.info(`Found ${jobs.length} jobs for workflow run attempt`);
-  //       core.info(JSON.stringify(jobs));
-  //       return jobs;
-  //     } else {
-  //       core.info("Using listJobsForWorkflowRun with pagination");
-  //       const jobs = await this.octokit.paginate(
-  //         this.octokit.rest.actions.listJobsForWorkflowRun,
-  //         queryParams
-  //     );
-  //     core.info(`Found ${jobs.length} jobs for workflow run`);
-  //     core.info(JSON.stringify(jobs));
-  //     return jobs;
-  //   }
-  // }
-
-  async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
-    let workflowJobs = null;
+  async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
     core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
-    if (attempt_number) {
-      workflowJobs =
-        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
-          ...this.commonQueryParams(),
-          run_id,
-          attempt_number
-        });
-      core.info("listJobsForWorkflowRunAttempt");
-      core.info(JSON.stringify(workflowJobs));
-    } else {
-      workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
-        ...this.commonQueryParams(),
-        run_id
-      });
-      core.info(JSON.stringify(workflowJobs));
+    const queryParams = {
+      ...this.commonQueryParams(),
+      run_id,
+    };
+      if (attempt_number) {
+        const jobs = await this.octokit.paginate(
+          this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
+          {
+            ...queryParams,
+            attempt_number
+          }
+        );
+        // core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+        core.info(JSON.stringify(jobs));
+        core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+        return jobs;
+      } else {
+        core.info("Using listJobsForWorkflowRun with pagination");
+        const jobs = await this.octokit.paginate(
+          this.octokit.rest.actions.listJobsForWorkflowRun,
+          queryParams
+      );
+      core.info(`Found ${jobs.length} jobs for workflow run`);
+      core.info(JSON.stringify(jobs));
+      return jobs;
     }
-
-    return workflowJobs.data.jobs;
   }
+
+  // async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
+  //   let workflowJobs = null;
+  //   core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
+  //   if (attempt_number) {
+  //     workflowJobs =
+  //       await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
+  //         ...this.commonQueryParams(),
+  //         run_id,
+  //         attempt_number
+  //       });
+  //     core.info("listJobsForWorkflowRunAttempt");
+  //     core.info(JSON.stringify(workflowJobs));
+  //   } else {
+  //     workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+  //       ...this.commonQueryParams(),
+  //       run_id
+  //     });
+  //     core.info(JSON.stringify(workflowJobs));
+  //   }
+  //   return workflowJobs.data.jobs;
+  // }
 
   /**
    * Get all artifacts associated with this run.
