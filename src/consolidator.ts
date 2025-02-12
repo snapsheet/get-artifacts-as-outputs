@@ -284,14 +284,17 @@ export class Consolidator {
    * Get all artifacts associated with this run.
    */
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
-    // const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
-    //   ...this.commonQueryParams(),
-    //   run_id: this.context.runId
-    // });
-    // core.info(JSON.stringify(response));
-    // core.info(`These are the artifacts: ${JSON.stringify(response.data.artifacts)}`);
+    const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
+      ...this.commonQueryParams(),
+      run_id: this.context.runId
+    });
+    //print the artifact names as a set
+    core.info(`Total number of non paginated artifacts: ${response.data.artifacts.length}`);
+    const nonPaginatedArtifactNames = new Set(response.data.artifacts.map((artifact) => artifact.name));
+    core.info(`Non Paginated Artifact Names: ${JSON.stringify(Array.from(nonPaginatedArtifactNames))}`);
+    core.info(`--------------------------------`);
 
-    // return response.data.artifacts;
+
     const artifacts = await this.octokit.paginate(
       this.octokit.rest.actions.listWorkflowRunArtifacts,
       {
@@ -300,6 +303,11 @@ export class Consolidator {
       }
     );
     core.info(`Total number of artifacts: ${artifacts.length}`);
+    //print the artifact names as a set
+    const artifactNames = new Set(artifacts.map((artifact) => artifact.name));
+    core.info(`Artifact Names: ${JSON.stringify(Array.from(artifactNames))}`);
+    core.info(`--------------------------------`);
+
     // core.info(`These are the artifacts: ${JSON.stringify(artifacts)}`);
     return artifacts;
   }
