@@ -239,6 +239,16 @@ export class Consolidator {
       return jobs;
     } else {
       core.info("Using listJobsForWorkflowRun with pagination");
+      const octokitPaginatedJobs = await this.octokit.paginate(
+        this.octokit.rest.actions.listJobsForWorkflowRun,
+        queryParams
+      );
+      core.info(`Found using octokit.paginate: ${octokitPaginatedJobs.length} jobs for workflow run`);
+      core.info(`--------------------------------`);
+      //print the job names as a set
+      const jobNames = new Set(octokitPaginatedJobs.map((job) => job.name));
+      core.info(`octokit.paginate Job Names: ${JSON.stringify(Array.from(jobNames))}`);
+      core.info(`--------------------------------`);
       // Use explicit pagination to debug
       let allJobs: JobInfo[] = [];
       let page = 1;
@@ -261,6 +271,10 @@ export class Consolidator {
       core.info(`--------------------------------`);
       core.info(`Total number of pages: ${page}`);  
       core.info(`Total jobs found across all pages: ${allJobs.length}`);
+      core.info(`--------------------------------`);
+      //print the job names as a set
+      const manualjobNames = new Set(allJobs.map((job) => job.name));
+      core.info(`allJobs Job Names: ${JSON.stringify(Array.from(manualjobNames))}`);
       core.info(`--------------------------------`);
       return allJobs;
     }
