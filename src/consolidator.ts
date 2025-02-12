@@ -32,8 +32,8 @@ export class Consolidator {
     this.artifacts = [];
     this.octokit = github.getOctokit(`${process.env.GITHUB_TOKEN}`);
     this.context = github.context;
-    core.info("Context:");
-    core.info(JSON.stringify(this.context));
+    // core.info("Context:");
+    // core.info(JSON.stringify(this.context));
   }
 
   /**
@@ -63,12 +63,20 @@ export class Consolidator {
         jobName,
         this.context.runId
       );
-      // core.info(`Current workflow jobs: ${JSON.stringify(currentWorkflowJobs)}`);
+      // create a set of current workflow job names
+      const currentJobNames = new Set(currentWorkflowJobs.map(job => job.name));
+      core.info(`Current workflow job names: ${JSON.stringify(Array.from(currentJobNames))}`);
+      core.info(`--------------------------------`);
       const lastRanWorkflows = await this.getLastRanWorkflowJobs(
         jobName,
         currentWorkflowJobs
       );
       core.info(`last ran workflow jobs: ${JSON.stringify(lastRanWorkflows)}`);
+      core.info(`last ran workflow jobs length: ${lastRanWorkflows.length}`); 
+      core.info(`--------------------------------`);
+      // create a set of job names
+      const jobNames = new Set(lastRanWorkflows.map(job => job.name));
+      core.info(`Last ran workflow job names: ${JSON.stringify(Array.from(jobNames))}`);
       const jobOutputs = await this.getJobOutputs(lastRanWorkflows);
       core.setOutput(jobName, JSON.stringify(jobOutputs));
     }
@@ -86,7 +94,7 @@ export class Consolidator {
       ref: this.context.payload.ref
     });
     core.info("getContent");
-    core.info(JSON.stringify(response.data.content));
+    // core.info(JSON.stringify(response.data.content));
 
     const schema = YAML.parse(
       Buffer.from(response.data.content, "base64").toString("utf8")
@@ -169,7 +177,14 @@ export class Consolidator {
         core.info(JSON.stringify(jobs));
         return jobs;
       } else {
-
+        
+        const workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+          ...this.commonQueryParams(),
+          run_id
+        });
+        core.info("Without pagination");
+        core.info(JSON.stringify(workflowJobs.data.jobs));
+        core.info(`--------------------------------`);
         core.info("Using listJobsForWorkflowRun with pagination");
         const jobs = await this.octokit.paginate(
           this.octokit.rest.actions.listJobsForWorkflowRun,
@@ -177,6 +192,7 @@ export class Consolidator {
         );
         core.info(`Found ${jobs.length} jobs for workflow run`);
         core.info(JSON.stringify(jobs));
+        core.info(`--------------------------------`);
         return jobs;
     }
   }
