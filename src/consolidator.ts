@@ -158,45 +158,45 @@ export class Consolidator {
   /**
    * Get all jobs running within this workflow. An optional attempt number can be passed.
    */
-  async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
-    core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
-    const queryParams = {
-      ...this.commonQueryParams(),
-      run_id,
-    };
-      if (attempt_number) {
-        const jobs = await this.octokit.paginate(
-          this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
-          {
-            ...queryParams,
-            attempt_number
-          }
-        );
-        // core.info(`Found ${jobs.length} jobs for workflow run attempt`);
-        core.info(`Found ${jobs.length} jobs for workflow run attempt`);
-        core.info(JSON.stringify(jobs));
-        return jobs;
-      } else {
+  // async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
+  //   core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
+  //   const queryParams = {
+  //     ...this.commonQueryParams(),
+  //     run_id,
+  //   };
+  //     if (attempt_number) {
+  //       const jobs = await this.octokit.paginate(
+  //         this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
+  //         {
+  //           ...queryParams,
+  //           attempt_number
+  //         }
+  //       );
+  //       // core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+  //       core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+  //       core.info(JSON.stringify(jobs));
+  //       return jobs;
+  //     } else {
         
-        const workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
-          ...this.commonQueryParams(),
-          run_id
-        });
-        core.info("Without pagination");
-        core.info(JSON.stringify(workflowJobs.data.jobs));
-        core.info(`TOTLA NUMBER OF JOBS WITHOUT PAGINATION: ${JSON.stringify(workflowJobs.data.jobs.length)}`);
-        core.info(`--------------------------------`);
-        core.info("Using listJobsForWorkflowRun with pagination");
-        const jobs = await this.octokit.paginate(
-          this.octokit.rest.actions.listJobsForWorkflowRun,
-          queryParams
-        );
-        core.info(`Found ${jobs.length} jobs for workflow run`);
-        core.info(JSON.stringify(jobs));
-        core.info(`--------------------------------`);
-        return jobs;
-    }
-  }
+  //       const workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+  //         ...this.commonQueryParams(),
+  //         run_id
+  //       });
+  //       core.info("Without pagination");
+  //       core.info(JSON.stringify(workflowJobs.data.jobs));
+  //       core.info(`TOTLA NUMBER OF JOBS WITHOUT PAGINATION: ${JSON.stringify(workflowJobs.data.jobs.length)}`);
+  //       core.info(`--------------------------------`);
+  //       core.info("Using listJobsForWorkflowRun with pagination");
+  //       const jobs = await this.octokit.paginate(
+  //         this.octokit.rest.actions.listJobsForWorkflowRun,
+  //         queryParams
+  //       );
+  //       core.info(`Found ${jobs.length} jobs for workflow run`);
+  //       core.info(JSON.stringify(jobs));
+  //       core.info(`--------------------------------`);
+  //       return jobs;
+  //   }
+  // }
 
   // async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
   //   let workflowJobs = null;
@@ -219,6 +219,52 @@ export class Consolidator {
   //   }
   //   return workflowJobs.data.jobs;
   // }
+
+  async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
+    core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
+    const queryParams = {
+      ...this.commonQueryParams(),
+      run_id,
+    };
+
+    if (attempt_number) {
+      const jobs = await this.octokit.paginate(
+        'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
+        {
+          ...queryParams,
+          attempt_number
+        }
+      );
+      core.info(`Found ${jobs.length} jobs for workflow run attempt`);
+      return jobs;
+    } else {
+      core.info("Using listJobsForWorkflowRun with pagination");
+      // Use explicit pagination to debug
+      let allJobs: JobInfo[] = [];
+      let page = 1;
+      
+      while (true) {
+        const response = await this.octokit.rest.actions.listJobsForWorkflowRun({
+          ...queryParams,
+          page,
+          per_page: 100
+        });
+        
+        core.info(`Page ${page}: Got ${response.data.jobs.length} jobs`);
+        allJobs = allJobs.concat(response.data.jobs);
+        
+        if (response.data.jobs.length < 100) {
+          break;
+        }
+        page++;
+      }
+      core.info(`--------------------------------`);
+      core.info(`Total number of pages: ${page}`);  
+      core.info(`Total jobs found across all pages: ${allJobs.length}`);
+      core.info(`--------------------------------`);
+      return allJobs;
+    }
+  }
 
   /**
    * Get all artifacts associated with this run.
