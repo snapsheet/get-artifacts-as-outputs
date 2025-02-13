@@ -272,9 +272,11 @@ export class Consolidator {
           const response = await this.octokit.rest.actions.listJobsForWorkflowRun({
             ...queryParams,
             page,
-            per_page: 100
+            per_page: 100,
+            filter: "all"
           });
-          
+          core.info(`Total number of non paginated jobs(while loop): total_count is ${nonpaginatedjobs.data.total_count} length is ${nonpaginatedjobs.data.jobs.length}`);
+
           core.info(`Page ${page}: Got ${response.data.jobs.length} jobs`);
           allJobs = allJobs.concat(response.data.jobs);
           
