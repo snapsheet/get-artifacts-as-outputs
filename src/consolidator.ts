@@ -243,7 +243,8 @@ export class Consolidator {
       }else {
         const nonpaginatedjobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
           ...this.commonQueryParams(),
-          run_id
+          run_id,
+          filter: "all"
         });
         core.info(`Total number of non paginated jobs: total_count is ${nonpaginatedjobs.data.total_count} length is ${nonpaginatedjobs.data.jobs.length}`);
         core.info(`--------------------------------`);
