@@ -245,7 +245,7 @@ export class Consolidator {
           ...this.commonQueryParams(),
           run_id
         });
-        core.info(`Total number of non paginated jobs: ${nonpaginatedjobs.data.jobs.length}`);
+        core.info(`Total number of non paginated jobs: total_count is ${nonpaginatedjobs.data.total_count} length is ${nonpaginatedjobs.data.jobs.length}`);
         core.info(`--------------------------------`);
         //print the job names as a set
         const nonpaginatedjobNames = new Set(nonpaginatedjobs.data.jobs.map((job) => job.name));
