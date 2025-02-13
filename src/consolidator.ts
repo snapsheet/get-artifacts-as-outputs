@@ -221,74 +221,82 @@ export class Consolidator {
   // }
 
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
-    core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
-    const queryParams = {
-      ...this.commonQueryParams(),
-      run_id,
-    };
-    let workflowJobs = null;
-    if (attempt_number) {
-      // Does not enter this block
-      core.info(`Using RunAttempt ${attempt_number}`);
-      workflowJobs =
-        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
-          ...this.commonQueryParams(),
-          run_id,
-          attempt_number
-        });
-      return workflowJobs.data.jobs;
-    }else {
-      const nonpaginatedjobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+    // run this function till the length of the jobs founds is at least 150
+    let keeprunning = true;
+    while(keeprunning) {
+        core.info(`Getting workflow jobs for run ${run_id} and attempt ${attempt_number}`);
+      const queryParams = {
         ...this.commonQueryParams(),
-        run_id
-      });
-      core.info(`Total number of non paginated jobs: ${nonpaginatedjobs.data.jobs.length}`);
-      core.info(`--------------------------------`);
-      //print the job names as a set
-      const nonpaginatedjobNames = new Set(nonpaginatedjobs.data.jobs.map((job) => job.name));
-      core.info(`Non Paginated Job Names: ${JSON.stringify(Array.from(nonpaginatedjobNames))}`);
-      core.info(`--------------------------------`);
-
-      core.info("Using listJobsForWorkflowRun with pagination");
-      const octokitPaginatedJobs = await this.octokit.paginate(
-        this.octokit.rest.actions.listJobsForWorkflowRun,
-        queryParams
-      );
-      core.info(`Found using octokit.paginate: ${octokitPaginatedJobs.length} jobs for workflow run`);
-      core.info(`--------------------------------`);
-      //print the job names as a set
-      const jobNames = new Set(octokitPaginatedJobs.map((job) => job.name));
-      core.info(`octokit.paginate Job Names: ${JSON.stringify(Array.from(jobNames))}`);
-      core.info(`--------------------------------`);
-      // Use explicit pagination to debug
-      let allJobs: JobInfo[] = [];
-      let page = 1;
-      
-      while (true) {
-        const response = await this.octokit.rest.actions.listJobsForWorkflowRun({
-          ...queryParams,
-          page,
-          per_page: 100
+        run_id,
+      };
+      let workflowJobs = null;
+      if (attempt_number) {
+        // Does not enter this block
+        core.info(`Using RunAttempt ${attempt_number}`);
+        workflowJobs =
+          await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
+            ...this.commonQueryParams(),
+            run_id,
+            attempt_number
+          });
+        return workflowJobs.data.jobs;
+      }else {
+        const nonpaginatedjobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
+          ...this.commonQueryParams(),
+          run_id
         });
+        core.info(`Total number of non paginated jobs: ${nonpaginatedjobs.data.jobs.length}`);
+        core.info(`--------------------------------`);
+        //print the job names as a set
+        const nonpaginatedjobNames = new Set(nonpaginatedjobs.data.jobs.map((job) => job.name));
+        core.info(`Non Paginated Job Names: ${JSON.stringify(Array.from(nonpaginatedjobNames))}`);
+        core.info(`--------------------------------`);
+
+        core.info("Using listJobsForWorkflowRun with pagination");
+        const octokitPaginatedJobs = await this.octokit.paginate(
+          this.octokit.rest.actions.listJobsForWorkflowRun,
+          queryParams
+        );
+        core.info(`Found using octokit.paginate: ${octokitPaginatedJobs.length} jobs for workflow run`);
+        core.info(`--------------------------------`);
+        //print the job names as a set
+        const jobNames = new Set(octokitPaginatedJobs.map((job) => job.name));
+        core.info(`octokit.paginate Job Names: ${JSON.stringify(Array.from(jobNames))}`);
+        core.info(`--------------------------------`);
+        // Use explicit pagination to debug
+        let allJobs: JobInfo[] = [];
+        let page = 1;
         
-        core.info(`Page ${page}: Got ${response.data.jobs.length} jobs`);
-        allJobs = allJobs.concat(response.data.jobs);
-        
-        if (response.data.jobs.length < 100) {
-          break;
+        while (true) {
+          const response = await this.octokit.rest.actions.listJobsForWorkflowRun({
+            ...queryParams,
+            page,
+            per_page: 100
+          });
+          
+          core.info(`Page ${page}: Got ${response.data.jobs.length} jobs`);
+          allJobs = allJobs.concat(response.data.jobs);
+          
+          if (response.data.jobs.length < 100) {
+            break;
+          }
+          page++;
         }
-        page++;
-      }
-      core.info(`--------------------------------`);
-      core.info(`Total number of pages: ${page}`);  
-      core.info(`Total jobs found across all pages: ${allJobs.length}`);
-      core.info(`--------------------------------`);
-      //print the job names as a set
-      const manualjobNames = new Set(allJobs.map((job) => job.name));
-      core.info(`allJobs Job Names: ${JSON.stringify(Array.from(manualjobNames))}`);
-      core.info(`--------------------------------`);
-      return allJobs;
+        core.info(`--------------------------------`);
+        core.info(`Total number of pages: ${page}`);  
+        core.info(`Total jobs found across all pages: ${allJobs.length}`);
+        core.info(`--------------------------------`);
+        //print the job names as a set
+        const manualjobNames = new Set(allJobs.map((job) => job.name));
+        core.info(`allJobs Job Names: ${JSON.stringify(Array.from(manualjobNames))}`);
+        core.info(`--------------------------------`);
+        if(allJobs.length >= 150) {
+          return allJobs;
+        }
+        await new Promise(resolve => setTimeout(resolve, 10000));        
+      }  
     }
+    return [];
   }
 
   /**
