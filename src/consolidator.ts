@@ -1,6 +1,6 @@
 import * as github from "@actions/github";
 import * as core from "@actions/core";
-import Axios from "axios";
+import Axios, { AxiosResponse } from "axios";
 import * as tmp from "tmp";
 import YAML from "yaml";
 import { Context } from "@actions/github/lib/context";
@@ -12,6 +12,20 @@ import * as unzipper from "unzipper";
 
 import { ArtifactInfo } from "./artifactInfo";
 import { JobInfo } from "./jobInfo";
+
+
+interface AxiosJob {
+  id: number;
+  name: string;
+  html_url: string;
+  // Add any other job properties you might need.
+}
+
+interface AxiosJobsResponse {
+  total_count: number;
+  jobs: AxiosJob[];
+}
+
 
 /**
  * Consolidate the output of all jobs that came prior to this job and return as the output of this job.
@@ -47,6 +61,50 @@ export class Consolidator {
       per_page: 100
     };
   }
+
+  async fetchAxiosJobs(): Promise<AxiosJob[]> {
+    const githubRepository = process.env.GITHUB_REPOSITORY || '';
+    const githubRunId = process.env.GITHUB_RUN_ID || '';
+    const githubToken = process.env.GITHUB_TOKEN || '';
+    let allJobs: AxiosJob[] = [];
+    let page = 1;
+
+    try {
+      while (true) {
+        const response: AxiosResponse<AxiosJobsResponse> = await Axios.get(
+          `https://api.github.com/repos/${githubRepository}/actions/runs/${githubRunId}/jobs`,
+          {
+            params: { 
+              per_page: 100,
+              page: page
+            },
+            headers: {
+              Accept: 'application/vnd.github.v3+json',
+              Authorization: `Bearer ${githubToken}`,
+            },
+          }
+        );
+
+        const jobs = response.data.jobs;
+        allJobs = allJobs.concat(jobs);
+        
+        // Break if we received fewer items than the page size (meaning it's the last page)
+        if (jobs.length < 100) {
+          break;
+        }
+        
+        page++;
+      }
+
+      core.info(`Fetched total of ${allJobs.length} jobs using Axios pagination`);
+      return allJobs;
+      
+    } catch (error: any) {
+      console.error('Error fetching jobs:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
 
   /**
    * Runtime entrypoint. Query for the last successful ran (not reran) jobs prior to this job and
@@ -143,6 +201,8 @@ export class Consolidator {
     );
   }
 
+  
+
   /**
    * Query for and filter jobs only relevent for the dependency relation.
    */
@@ -154,6 +214,8 @@ export class Consolidator {
     const workflowJobs = await this.getWorkflowJobs(runId, runAttempt);
     return this.filterForRelevantJobDetails(jobName, workflowJobs);
   }
+
+  
 
   /**
    * Get all jobs running within this workflow. An optional attempt number can be passed.
@@ -220,6 +282,8 @@ export class Consolidator {
   //   return workflowJobs.data.jobs;
   // }
 
+  
+
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null): Promise<JobInfo[]> {
     // run this function till the length of the jobs founds is at least 150
     let keeprunning = true;
@@ -241,6 +305,20 @@ export class Consolidator {
           });
         return workflowJobs.data.jobs;
       }else {
+        // also make a call a call like thi
+        // response=$(curl --fail-with-body -s -D - -H "Accept: application/vnd.github.v3+json" \
+        //   -H "Authorization: Bearer $GITHUB_TOKEN" \
+        //   "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100&page=${page}")
+        // and then parse the response to get the total_count and the jobs
+        // and then use the total_count to paginate the job     
+
+        const axiosJobs = await this.fetchAxiosJobs();
+        core.info(`Total number of jobs fetched from axios: ${axiosJobs.length}`);
+        core.info(`--------------------------------`);
+        const axiosJobNames = new Set(axiosJobs.map((job) => job.name));
+        core.info(`Axios Job Names: ${JSON.stringify(Array.from(axiosJobNames))}`);
+        core.info(`--------------------------------`);
+        
         const nonpaginatedjobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
           ...this.commonQueryParams(),
           run_id,
