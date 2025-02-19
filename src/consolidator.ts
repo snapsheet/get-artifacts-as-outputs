@@ -305,12 +305,6 @@ export class Consolidator {
           });
         return workflowJobs.data.jobs;
       }else {
-        // also make a call a call like thi
-        // response=$(curl --fail-with-body -s -D - -H "Accept: application/vnd.github.v3+json" \
-        //   -H "Authorization: Bearer $GITHUB_TOKEN" \
-        //   "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100&page=${page}")
-        // and then parse the response to get the total_count and the jobs
-        // and then use the total_count to paginate the job     
 
         const axiosJobs = await this.fetchAxiosJobs();
         core.info(`Total number of jobs fetched from axios: ${axiosJobs.length}`);
