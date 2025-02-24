@@ -152,37 +152,45 @@ export class Consolidator {
 
     if (attempt_number) {
       workflowJobs =
-        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
-          ...this.commonQueryParams(),
-          run_id,
-          attempt_number
-        });
+       await this.octokit.paginate(
+        this.octokit.rest.actions.listJobsForWorkflowRun, {
+        ...this.commonQueryParams(),
+        run_id,
+        attempt_number
+      });
+      
       core.debug("listJobsForWorkflowRunAttempt");
       core.debug(JSON.stringify(workflowJobs));
     } else {
-      workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
-        ...this.commonQueryParams(),
-        run_id
-      });
+      workflowJobs = await this.octokit.paginate(
+        this.octokit.rest.actions.listJobsForWorkflowRun,
+        {
+          ...this.commonQueryParams(),
+          run_id
+        }
+      );
       core.debug("listJobsForWorkflowRun");
       core.debug(JSON.stringify(workflowJobs));
     }
 
-    return workflowJobs.data.jobs;
+    return workflowJobs;
   }
 
   /**
    * Get all artifacts associated with this run.
    */
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
-    const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
-      ...this.commonQueryParams(),
-      run_id: this.context.runId
-    });
+    const artifacts = await this.octokit.paginate(
+      this.octokit.rest.actions.listWorkflowRunArtifacts,
+      {
+        ...this.commonQueryParams(),
+        run_id: this.context.runId
+      }
+    );
     core.debug("listWorkflowRunArtifacts");
-    core.debug(JSON.stringify(response));
+    core.debug(JSON.stringify(artifacts));
 
-    return response.data.artifacts;
+    return artifacts;
   }
 
   /**
