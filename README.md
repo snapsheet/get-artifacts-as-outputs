@@ -55,7 +55,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - id: previous_jobs
-        uses: snapsheet/get-artifacts-as-outputs@0.1.1
+        uses: snapsheet/get-artifacts-as-outputs@0.1.2
         with:
           output_filename: outputs.json
         # ...when this job's outputs are accessed, it will have the following format:
