@@ -9,6 +9,7 @@ import { PaginateInterface } from "@octokit/plugin-paginate-rest";
 import { Api } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 import * as fs from "fs";
 import * as unzipper from "unzipper";
+import _ from "lodash";
 
 import { ArtifactInfo } from "./artifactInfo";
 import { JobInfo } from "./jobInfo";
@@ -55,17 +56,7 @@ export class Consolidator {
   async run() {
     this.schema = await this.getWorkflowSchema();
     this.artifacts = await this.getRunArtifacts();
-
-    for (const jobName of this.schema.jobs[this.context.job].needs) {
-      const currentWorkflowJobs = await this.getRelevantWorkflowJobs(
-        jobName,
-        this.context.runId
-      );
-      const lastRanWorkflows = await this.getLastRanWorkflowJobs(
-        jobName,
-        currentWorkflowJobs
-      );
-      const jobOutputs = await this.getJobOutputs(lastRanWorkflows);
+    for (const [jobName, jobOutputs] of _.toPairs(await this.getJobOutputs())) {
       core.setOutput(jobName, JSON.stringify(jobOutputs));
     }
   }
@@ -92,86 +83,6 @@ export class Consolidator {
   }
 
   /**
-   * Get jobs running within this workflow that are immediately preceding on this job, and have this
-   * job as a dependent. If a workflow has been reran, this will iteratively query previous runs
-   * until it can identify the job details that generated Artifacts.
-   */
-  async getLastRanWorkflowJobs(
-    jobName: string,
-    workflowJobs: JobInfo[]
-  ): Promise<JobInfo[]> {
-    if (workflowJobs.length == 0) return [];
-
-    // runAttempt should be the same across jobs
-    const runAttempt =
-      (workflowJobs.find((job) => job["run_attempt"]) || {})["run_attempt"] ||
-      1;
-
-    const jobsToReturn = workflowJobs.filter((job) => job.runner_id != 0) || [];
-    const jobsToRerun =
-      workflowJobs.filter(
-        (job) => job.runner_id == 0 && (job["run_attempt"] || 1) > 1
-      ) || [];
-
-    // return the relevant jobs immediately to avoid unneeded queries
-    if (jobsToRerun.length == 0 || !(runAttempt > 1)) return jobsToReturn;
-
-    // save the job names to filter by later
-    const reranJobNames = jobsToRerun.map((job) => job.name);
-    // query for the relevent jobs again, but from the previous run attempt
-    let moreJobs: JobInfo[] = await this.getRelevantWorkflowJobs(
-      jobName,
-      this.context.runId,
-      runAttempt - 1
-    );
-    // filter out the jobs that don't have the same name as the relevent ones from this run
-    moreJobs = moreJobs.filter((job) => reranJobNames.includes(job.name));
-    // return the jobs to return while recursing in case we need to look back farther in the run attempts
-    return jobsToReturn.concat(
-      await this.getLastRanWorkflowJobs(jobName, moreJobs)
-    );
-  }
-
-  /**
-   * Query for and filter jobs only relevent for the dependency relation.
-   */
-  async getRelevantWorkflowJobs(
-    jobName: string,
-    runId: number,
-    runAttempt: number | null = null
-  ): Promise<JobInfo[]> {
-    const workflowJobs = await this.getWorkflowJobs(runId, runAttempt);
-    return this.filterForRelevantJobDetails(jobName, workflowJobs);
-  }
-
-  /**
-   * Get all jobs running within this workflow. An optional attempt number can be passed.
-   */
-  async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
-    let workflowJobs = null;
-
-    if (attempt_number) {
-      workflowJobs =
-        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
-          ...this.commonQueryParams(),
-          run_id,
-          attempt_number
-        });
-      core.debug("listJobsForWorkflowRunAttempt");
-      core.debug(JSON.stringify(workflowJobs));
-    } else {
-      workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
-        ...this.commonQueryParams(),
-        run_id
-      });
-      core.debug("listJobsForWorkflowRun");
-      core.debug(JSON.stringify(workflowJobs));
-    }
-
-    return workflowJobs.data.jobs;
-  }
-
-  /**
    * Get all artifacts associated with this run.
    */
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
@@ -186,38 +97,16 @@ export class Consolidator {
   }
 
   /**
-   * Get the job details for any job that ran with that same definition. Matches the full name immediately followed by open parenthesis.
-   */
-  filterForRelevantJobDetails(
-    jobName: string,
-    workflowJobs: JobInfo[]
-  ): JobInfo[] {
-    const config = this.schema.jobs[jobName];
-    return workflowJobs.filter((job) =>
-      new RegExp(`^${config.name} \\(\\S+\\)$`).test(job.name)
-    );
-  }
-
-  /**
    * Gather the outputs for the job runs and put them into an array.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
+  async getJobOutputs(): Promise<{ [k: string]: any }> {
     // create a data structure with the job name and associated artifact
-    const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
-      new Map(
-        jobDetails
-          .map((job) => [
-            job.name,
-            this.artifacts.find((a) => a.name == job.id.toString())
-          ])
-          .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
-      )
-    );
+    const jobArtifacts = await this.jobArtifacts();
 
     core.debug(
       `Found Artifacts (${JSON.stringify(
-        Object.values(jobArtifacts).map((a) => a.id)
+        Object.values(jobArtifacts).map((a) => a?.id)
       )})`
     );
 
@@ -226,7 +115,7 @@ export class Consolidator {
     const jobResults: { [k: string]: any } = {};
     for (const jobName of Object.keys(jobArtifacts)) {
       const artifact = jobArtifacts[jobName];
-      const artifactPath = await this.downloadArtifactFile(artifact.id);
+      const artifactPath = await this.downloadArtifactFile(artifact?.id);
       jobResults[jobName] = this.readOutputs(artifactPath);
     }
     core.debug(`Job Outputs: ${JSON.stringify(jobResults)}`);
@@ -236,9 +125,46 @@ export class Consolidator {
   }
 
   /**
+   * @returns (async) Object with attribute keys representing name strings for jobs that the currently running job depends on, and values that correlate to an artifact generated by that job.
+   */
+  async jobArtifacts(): Promise<{ [k: string]: ArtifactInfo | undefined }> {
+    return _.mapValues((await this.dependsOnJobs()), (job: JobInfo | undefined) => this.artifacts.find((a) => a.name == job?.id.toString()));
+  }
+
+  /**
+   * @returns (async) Object with attribute keys representing name strings for jobs that the currently running job depends on, and values that correlate to a JobInfo.
+   */
+  async dependsOnJobs(): Promise<{ [k: string]: JobInfo | undefined}> {
+    const jobNameMatchers = this.dependsOnJobNameRegex();
+    const workflowJobs = await this.octokit.paginate(
+      this.octokit.rest.actions.listJobsForWorkflowRun,
+      {...this.commonQueryParams(), run_id: this.context.runId, filter:"all"}
+    );
+    const thatRan = workflowJobs.filter((job) => job.runner_id);
+    const filteredByName = thatRan.filter((job) => jobNameMatchers.find((exp: RegExp) => exp.test(job.name)));
+    const orderedByRunAttempt = _.orderBy(filteredByName, "run_attempt", "desc");
+    const groupedByName = _.groupBy(orderedByRunAttempt, "name");
+    return _.mapValues(groupedByName, (job: Array<JobInfo>) => _.first(job));
+  }
+
+  /**
+   * @returns Array of regular expressions that will match the `dependsOn` references for this currently running job.
+   */
+  dependsOnJobNameRegex(): RegExp[] {
+    const dependsOnJobDefinitions = _.pick(this.schema.jobs, this.schema.jobs[this.context.job].needs);
+    return Object.values(dependsOnJobDefinitions).map((job) => {
+      return new RegExp(job.strategy?.matrix ? `^${job.name} \\(\\S+\\)$` : job.name);
+    });
+  }
+
+  /**
    * Download and unpack an artifact to a temporary directory. Return the directory name.
    */
-  async downloadArtifactFile(artifactId: number): Promise<string> {
+  async downloadArtifactFile(artifactId: number | undefined): Promise<string | undefined> {
+    if(!artifactId) {
+      return undefined;
+    }
+
     const tmpFile = tmp.fileSync();
     const tmpDir = tmp.dirSync();
 
@@ -274,7 +200,11 @@ export class Consolidator {
    * Read the outputs from the artifact directory path.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readOutputs(artifactDirectoryPath: string): any {
+  readOutputs(artifactDirectoryPath: string | undefined): any {
+    if(!artifactDirectoryPath) {
+      return undefined;
+    }
+
     const outputFilename = core.getInput("output_filename");
     const readData = fs.readFileSync(
       `${artifactDirectoryPath}/${outputFilename}`,
