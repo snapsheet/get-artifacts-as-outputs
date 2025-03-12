@@ -13,12 +13,9 @@ import MockAdapter from "axios-mock-adapter";
 import fs from "fs";
 import unzipper from "unzipper";
 import { ArtifactInfo } from "../src/artifactInfo";
-// import { JobInfo } from "../src/jobInfo";
 import _ from "lodash";
 import { JobInfo } from "../src/jobInfo";
 import { jest } from "@jest/globals";
-// import { } from "@types/jest";
-// import * as jest from "@jest/globals";
 
 /**
  * Mock the `core` logging functions so they don't show in test cases.
@@ -72,9 +69,7 @@ jest.mock<typeof import("@actions/github")>("@actions/github", () => {
               response = ListJobsForWorkflowRunFactory.generate({
                 url: endpoint
               });
-            } else if (
-              /\/actions\/artifacts\/\d+\/zip(.*)$/.test(endpoint)
-            ) {
+            } else if (/\/actions\/artifacts\/\d+\/zip(.*)$/.test(endpoint)) {
               response = DownloadArtifactResponseFactory.generate({
                 url: endpoint
               });
@@ -119,19 +114,10 @@ jest.mock<typeof import("fs")>("fs", () => {
 
 describe("Consolidator", () => {
   let subject: Consolidator;
-  // let mockAdapter: MockAdapter;
-
-  // beforeAll(() => {
-  //   mockAdapter = new MockAdapter(axios);
-  // });
 
   beforeEach(() => {
     subject = new Consolidator();
   });
-
-  // afterEach(() => {
-  //   mockAdapter.reset();
-  // });
 
   it("should be defined", () => {
     expect(subject).toBeDefined();
@@ -156,17 +142,26 @@ describe("Consolidator", () => {
   describe("jobArtifacts", () => {
     it("formats the found artifacts appropriately", async () => {
       const fakeJob = WorkflowJobFactory.generate();
-      jest.spyOn(subject, "getWorkflowJobs").mockImplementation(async (run_id: number) => {
-        return ListJobsForWorkflowRunFactory.generate({url: `/doesnt/matter/${run_id}`}).data.jobs;
-      });
-      jest.spyOn(subject, "filterForRelevantJobDetails").mockImplementation(async (jobs: JobInfo[]) => {
-        jobs; //...because TS requires that it be referenced...
-        return {"Something": fakeJob};
-      });
-      const mockArtifactResponse = ListWorkflowRunArtifactResponseFactory.generate();
+      jest
+        .spyOn(subject, "getWorkflowJobs")
+        .mockImplementation(async (run_id: number) => {
+          return ListJobsForWorkflowRunFactory.generate({
+            url: `/doesnt/matter/${run_id}`
+          }).data.jobs;
+        });
+      jest
+        .spyOn(subject, "filterForRelevantJobDetails")
+        .mockImplementation(async (jobs: JobInfo[]) => {
+          jobs; //...because TS requires that it be referenced...
+          return { Something: fakeJob };
+        });
+      const mockArtifactResponse =
+        ListWorkflowRunArtifactResponseFactory.generate();
       subject.artifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
       subject.artifacts[0].name = fakeJob.id.toString();
-      expect(await subject.jobArtifacts()).toEqual({"Something": subject.artifacts[0]});
+      expect(await subject.jobArtifacts()).toEqual({
+        Something: subject.artifacts[0]
+      });
     });
   });
 
@@ -284,22 +279,32 @@ describe("Consolidator", () => {
   describe("getJobOutputs", () => {
     // let jobs: JobInfo[];
     let artifacts: ArtifactInfo[];
-    
+
     beforeEach(() => {
-      const mockArtifactResponse = ListWorkflowRunArtifactResponseFactory.generate();
+      const mockArtifactResponse =
+        ListWorkflowRunArtifactResponseFactory.generate();
       artifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
       const filteredArtifacts = {
         "Some Verbose Job Name (1)": artifacts[0],
         "Some Verbose Job Name (2)": artifacts[1],
         "Some Verbose Job Name (3)": artifacts[2]
       };
-      jest.spyOn(subject, "jobArtifacts").mockImplementation(async (): Promise<{ [k: string]: ArtifactInfo | undefined }> => filteredArtifacts);
-      jest.spyOn(subject, "downloadArtifactFile").mockImplementation(async (id: number | undefined) => {
-        return `path/to/${id}`;
-      });
-      jest.spyOn(subject, "readOutputs").mockImplementation((filepath: string | undefined) => {
-        return `Results for ${filepath}`;
-      });
+      jest
+        .spyOn(subject, "jobArtifacts")
+        .mockImplementation(
+          async (): Promise<{ [k: string]: ArtifactInfo | undefined }> =>
+            filteredArtifacts
+        );
+      jest
+        .spyOn(subject, "downloadArtifactFile")
+        .mockImplementation(async (id: number | undefined) => {
+          return `path/to/${id}`;
+        });
+      jest
+        .spyOn(subject, "readOutputs")
+        .mockImplementation((filepath: string | undefined) => {
+          return `Results for ${filepath}`;
+        });
     });
 
     it("renders the debug info, and formats the results as expected", async () => {
@@ -318,19 +323,28 @@ describe("Consolidator", () => {
           }
         }
       };
-      
-      const coreDebugSpy = jest.spyOn(core, "debug").mockImplementation((message) => message);
+
+      const coreDebugSpy = jest
+        .spyOn(core, "debug")
+        .mockImplementation((message) => message);
       const result = await subject.getJobOutputs();
       expect(coreDebugSpy).toHaveBeenNthCalledWith(1, "Context:");
-      expect(coreDebugSpy).toHaveBeenNthCalledWith(2, JSON.stringify(subject.context));
-      expect(coreDebugSpy).toHaveBeenNthCalledWith(3, 
+      expect(coreDebugSpy).toHaveBeenNthCalledWith(
+        2,
+        JSON.stringify(subject.context)
+      );
+      expect(coreDebugSpy).toHaveBeenNthCalledWith(
+        3,
         `Found Artifacts ([${artifacts[0].id},${artifacts[1].id},${artifacts[2].id}])`
       );
-      expect(coreDebugSpy).toHaveBeenNthCalledWith(4, `Job Outputs: ${JSON.stringify({
-        "Some Verbose Job Name (1)": `Results for path/to/${artifacts[0].id}`,
-        "Some Verbose Job Name (2)": `Results for path/to/${artifacts[1].id}`,
-        "Some Verbose Job Name (3)": `Results for path/to/${artifacts[2].id}`
-      })}`);
+      expect(coreDebugSpy).toHaveBeenNthCalledWith(
+        4,
+        `Job Outputs: ${JSON.stringify({
+          "Some Verbose Job Name (1)": `Results for path/to/${artifacts[0].id}`,
+          "Some Verbose Job Name (2)": `Results for path/to/${artifacts[1].id}`,
+          "Some Verbose Job Name (3)": `Results for path/to/${artifacts[2].id}`
+        })}`
+      );
       expect(result).not.toBeUndefined();
     });
   });
@@ -360,7 +374,9 @@ describe("Consolidator", () => {
 
     it("tries to download the artifact as expected", async () => {
       const zipperSpy = jest.spyOn(unzipper, "Extract");
-      const downloadFileSpy = jest.spyOn(subject, "downloadFile").mockImplementation(async (url, path) => [url, path]);
+      const downloadFileSpy = jest
+        .spyOn(subject, "downloadFile")
+        .mockImplementation(async (url, path) => [url, path]);
       await subject.downloadArtifactFile(123);
       expect(zipperSpy).toHaveBeenCalled();
       expect(downloadFileSpy).toHaveBeenCalled();
@@ -375,11 +391,16 @@ describe("Consolidator", () => {
 
     it("reads the output file name from the given path", async () => {
       jest.spyOn(fs, "readFileSync").mockImplementation((filePath) => {
-        return JSON.stringify({"someArbitrary": "JSON data", "from": filePath});
+        return JSON.stringify({ someArbitrary: "JSON data", from: filePath });
       });
 
       const result = subject.readOutputs("some/path/to/a/file");
-      expect(result).toEqual(JSON.stringify({"someArbitrary": "JSON data", "from": "some/path/to/a/file/outputFileName.txt"}));
+      expect(result).toEqual(
+        JSON.stringify({
+          someArbitrary: "JSON data",
+          from: "some/path/to/a/file/outputFileName.txt"
+        })
+      );
     });
   });
 
@@ -387,22 +408,33 @@ describe("Consolidator", () => {
     it("calls the Axios library and returns a promise with the data stream", async () => {
       const mockedWriteStream = fs.createWriteStream("/dev/null");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockOn = jest.spyOn(mockedWriteStream, "on").mockImplementation((event: string | symbol, listener: (...args: any[]) => void) => {
-        if (event == "close") {
-          listener();
-        }
-        return mockedWriteStream;
-      });
+      const mockOn = jest
+        .spyOn(mockedWriteStream, "on")
+        .mockImplementation(
+          (event: string | symbol, listener: (...args: any[]) => void) => {
+            if (event == "close") {
+              listener();
+            }
+            return mockedWriteStream;
+          }
+        );
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const writeSpy = jest.spyOn(fs, "createWriteStream").mockImplementation((_) => mockedWriteStream);
+      const writeSpy = jest
+        .spyOn(fs, "createWriteStream")
+        .mockImplementation((_) => mockedWriteStream);
       const mockPipe = jest.fn();
       const mockAdapter = new MockAdapter(axios);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      mockAdapter.onGet("https://not-a-real-site-domain-host.name/some/file/url").reply(async (inputConfig) => {
-        return [200, {pipe: mockPipe, thing: "stuff", inputConfig}];
-      });
+      mockAdapter
+        .onGet("https://not-a-real-site-domain-host.name/some/file/url")
+        .reply(async (inputConfig) => {
+          return [200, { pipe: mockPipe, thing: "stuff", inputConfig }];
+        });
       await expect(
-        subject.downloadFile("https://not-a-real-site-domain-host.name/some/file/url", "/some/local/file/path")
+        subject.downloadFile(
+          "https://not-a-real-site-domain-host.name/some/file/url",
+          "/some/local/file/path"
+        )
       ).resolves.toBe(true);
       expect(mockPipe).toHaveBeenCalledWith(mockedWriteStream);
       expect(writeSpy).toHaveBeenCalled();
@@ -412,24 +444,35 @@ describe("Consolidator", () => {
     it("calls the Axios library and returns a promise with the data stream", async () => {
       const mockedWriteStream = fs.createWriteStream("/dev/null");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockOn = jest.spyOn(mockedWriteStream, "on").mockImplementation((event: string | symbol, listener: (...args: any[]) => void) => {
-        if (event == "error") {
-          listener("this is an error");
-        } else if (event == "close") {
-          listener();
-        }
-        return mockedWriteStream;
-      });
+      const mockOn = jest
+        .spyOn(mockedWriteStream, "on")
+        .mockImplementation(
+          (event: string | symbol, listener: (...args: unknown[]) => void) => {
+            if (event == "error") {
+              listener("this is an error");
+            } else if (event == "close") {
+              listener();
+            }
+            return mockedWriteStream;
+          }
+        );
       const mockClose = jest.spyOn(mockedWriteStream, "close");
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const writeSpy = jest.spyOn(fs, "createWriteStream").mockImplementation((_) => mockedWriteStream);
+      const writeSpy = jest
+        .spyOn(fs, "createWriteStream")
+        .mockImplementation((_) => mockedWriteStream);
       const mockPipe = jest.fn();
       const mockAdapter = new MockAdapter(axios);
-      mockAdapter.onGet("https://not-a-real-site-domain-host.name/some/file/url").reply(async (inputConfig) => {
-        return [200, {pipe: mockPipe, thing: "stuff", inputConfig}];
-      });
+      mockAdapter
+        .onGet("https://not-a-real-site-domain-host.name/some/file/url")
+        .reply(async (inputConfig) => {
+          return [200, { pipe: mockPipe, thing: "stuff", inputConfig }];
+        });
       await expect(
-        subject.downloadFile("https://not-a-real-site-domain-host.name/some/file/url", "/some/local/file/path")  
+        subject.downloadFile(
+          "https://not-a-real-site-domain-host.name/some/file/url",
+          "/some/local/file/path"
+        )
       ).rejects.toBe("this is an error");
       expect(mockClose).toHaveBeenCalled();
       expect(mockPipe).toHaveBeenCalledWith(mockedWriteStream);
@@ -445,17 +488,27 @@ describe("Consolidator", () => {
         "Some Verbose Job Name (2)": "Some results output.",
         "Some Verbose Job Name (3)": "Some results output."
       };
-      const getWorkflowSchemaSpy = jest.spyOn(subject, "getWorkflowSchema").mockImplementation(async () => workflowContent);
-      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts").mockImplementation(async () => []);
-      const getJobOutputsSpy = jest.spyOn(subject, "getJobOutputs").mockImplementation(async (): Promise<{ [k: string]: string }> => mockOutputs);
-      const setOutputSpy = jest.spyOn(core, "setOutput").mockImplementation((jobName, jobOutputs) => [jobName, jobOutputs]);
+      const getWorkflowSchemaSpy = jest
+        .spyOn(subject, "getWorkflowSchema")
+        .mockImplementation(async () => workflowContent);
+      const getRunArtifactsSpy = jest
+        .spyOn(subject, "getRunArtifacts")
+        .mockImplementation(async () => []);
+      const getJobOutputsSpy = jest
+        .spyOn(subject, "getJobOutputs")
+        .mockImplementation(
+          async (): Promise<{ [k: string]: string }> => mockOutputs
+        );
+      const setOutputSpy = jest
+        .spyOn(core, "setOutput")
+        .mockImplementation((jobName, jobOutputs) => [jobName, jobOutputs]);
 
       await subject.run();
 
       expect(getWorkflowSchemaSpy).toHaveBeenCalled();
       expect(getRunArtifactsSpy).toHaveBeenCalled();
       expect(getJobOutputsSpy).toHaveBeenCalled();
-      
+
       _.toPairs(mockOutputs).forEach(([jobName, jobOutputs]) => {
         expect(setOutputSpy).toHaveBeenCalledWith(jobName, jobOutputs);
       });

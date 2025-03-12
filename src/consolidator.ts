@@ -100,9 +100,11 @@ export class Consolidator {
       this.schema.jobs,
       this.schema.jobs[this.context.job]?.needs
     );
-    return Object.values(dependsOnJobDefinitions).filter((j) => j.strategy?.matrix).map((job) => {
-      return new RegExp(`^${job.name} \\(\\S+\\)$`);
-    });
+    return Object.values(dependsOnJobDefinitions)
+      .filter((j) => j.strategy?.matrix)
+      .map((job) => {
+        return new RegExp(`^${job.name} \\(\\S+\\)$`);
+      });
   }
 
   /**
@@ -148,7 +150,10 @@ export class Consolidator {
       "desc"
     );
     const groupedByName = _.groupBy(orderedByRunAttempt, "name");
-    const jobsThatGeneratedArtifacts = _.mapValues(groupedByName, (job: Array<JobInfo>) => _.first(job));
+    const jobsThatGeneratedArtifacts = _.mapValues(
+      groupedByName,
+      (job: Array<JobInfo>) => _.first(job)
+    );
     return jobsThatGeneratedArtifacts;
   }
 
