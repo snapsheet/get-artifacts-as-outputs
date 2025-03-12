@@ -10,7 +10,6 @@ export class ListWorkflowRunArtifactResponseFactory extends ResponseFactory {
   }) {
     const orgName = faker.word.noun().toLowerCase();
     const repoName = faker.word.noun().toLowerCase();
-    const id = faker.number.int({ min: 1000000000, max: 2000000000 });
     const workflow_run_id = faker.number.int({
       min: 1000000000,
       max: 2000000000
@@ -21,13 +20,14 @@ export class ListWorkflowRunArtifactResponseFactory extends ResponseFactory {
     const total_count = faker.number.int({ min: 5, max: 10 });
     const artifacts: unknown[] = [];
     for (let i = 0; i < total_count; i++) {
+      const artifactId = faker.number.int({ min: 1000000000, max: 2000000000 });
       artifacts.push({
-        id,
+        id: artifactId,
         node_id: faker.string.alphanumeric({ length: 28 }),
         name: "24834938703",
         size_in_bytes: 354,
-        url: `https://api.github.com/repos/${orgName}/${repoName}/actions/artifacts/${id}`,
-        archive_download_url: `https://api.github.com/repos/${orgName}/${repoName}/actions/artifacts/${id}/zip`,
+        url: `https://api.github.com/repos/${orgName}/${repoName}/actions/artifacts/${artifactId}`,
+        archive_download_url: `https://api.github.com/repos/${orgName}/${repoName}/actions/artifacts/${artifactId}/zip`,
         expired: false,
         created_at: faker.date.soon().toISOString(),
         updated_at: faker.date.soon().toISOString(),
