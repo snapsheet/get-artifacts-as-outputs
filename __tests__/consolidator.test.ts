@@ -192,7 +192,7 @@ describe("Consolidator", () => {
           some_other_job_name: {
             name: "Some Other Verbose Job Name",
             strategy: {
-              matrix: [4, 5, 6]
+              matrix: "${{ some.github-interpolated.value }}"
             }
           },
           some_job_name_without_a_matrix: {
@@ -210,7 +210,7 @@ describe("Consolidator", () => {
       };
     });
 
-    it("finds jobs that start with the job name", async () => {
+    it("finds matrix jobs that start with the job name", async () => {
       const results = await subject.filterForRelevantJobDetails([
         WorkflowJobFactory.generate({
           name: "Some Verbose Job Name (matrix1)"
@@ -227,16 +227,20 @@ describe("Consolidator", () => {
         WorkflowJobFactory.generate({
           name: "Some Verbose Job Name (matrix5)"
         }),
-        WorkflowJobFactory.generate({ name: "Some other unrelated job" }),
-        WorkflowJobFactory.generate({ name: "another unrelated job" })
+        WorkflowJobFactory.generate({ name: "Some Other Verbose Job Name (small)" }),
+        WorkflowJobFactory.generate({ name: "Some Other Verbose Job Name (medium)" }),
+        WorkflowJobFactory.generate({ name: "Some Other Verbose Job Name (large)" }),
+        WorkflowJobFactory.generate({ name: "Some Other Job Name Without A Matrix" })
       ]);
-      expect(Object.values(results).length).toEqual(5);
       expect(Object.keys(results)).toEqual([
         "Some Verbose Job Name (matrix1)",
         "Some Verbose Job Name (matrix2)",
         "Some Verbose Job Name (matrix3)",
         "Some Verbose Job Name (matrix4)",
-        "Some Verbose Job Name (matrix5)"
+        "Some Verbose Job Name (matrix5)",
+        "Some Other Verbose Job Name (small)",
+        "Some Other Verbose Job Name (medium)",
+        "Some Other Verbose Job Name (large)"
       ]);
     });
 
@@ -277,7 +281,6 @@ describe("Consolidator", () => {
   });
 
   describe("getJobOutputs", () => {
-    // let jobs: JobInfo[];
     let artifacts: ArtifactInfo[];
 
     beforeEach(() => {
@@ -405,7 +408,7 @@ describe("Consolidator", () => {
   });
 
   describe("downloadFile", () => {
-    it("calls the Axios library and returns a promise with the data stream", async () => {
+    it("calls the Axios library and resolves a promise with true", async () => {
       const mockedWriteStream = fs.createWriteStream("/dev/null");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockOn = jest
@@ -441,7 +444,7 @@ describe("Consolidator", () => {
       expect(mockOn).toHaveBeenCalled();
     });
 
-    it("calls the Axios library and returns a promise with the data stream", async () => {
+    it("calls the Axios library and rejects the promise with an error message", async () => {
       const mockedWriteStream = fs.createWriteStream("/dev/null");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockOn = jest
@@ -482,7 +485,7 @@ describe("Consolidator", () => {
   });
 
   describe("run", () => {
-    it("iterates over jobs by dependency and gets the data from GitHub", async () => {
+    it("sets any outputs that were found", async () => {
       const mockOutputs = {
         "Some Verbose Job Name (1)": "Some results output.",
         "Some Verbose Job Name (2)": "Some results output.",
