@@ -142,6 +142,7 @@ describe("Consolidator", () => {
   describe("jobArtifacts", () => {
     it("formats the found artifacts appropriately", async () => {
       const fakeJob = WorkflowJobFactory.generate();
+      const otherFakeJob = WorkflowJobFactory.generate();
       jest
         .spyOn(subject, "getWorkflowJobs")
         .mockImplementation(async (run_id: number) => {
@@ -151,16 +152,21 @@ describe("Consolidator", () => {
         });
       jest
         .spyOn(subject, "filterForRelevantJobDetails")
-        .mockImplementation(async (jobs: JobInfo[]) => {
-          jobs; //...because TS requires that it be referenced...
-          return { Something: fakeJob };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        .mockImplementation(async (_jobs: JobInfo[]) => {
+          return {
+            job_key_one: { Something: fakeJob },
+            job_key_two: { SomethingElse: otherFakeJob },
+          };
         });
       const mockArtifactResponse =
         ListWorkflowRunArtifactResponseFactory.generate();
       subject.artifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
       subject.artifacts[0].name = fakeJob.id.toString();
+      subject.artifacts[1].name = otherFakeJob.id.toString();
       expect(await subject.jobArtifacts()).toEqual({
-        Something: subject.artifacts[0]
+        job_key_one: {Something: subject.artifacts[0]},
+        job_key_two: {SomethingElse: subject.artifacts[1]}
       });
     });
   });
@@ -211,7 +217,7 @@ describe("Consolidator", () => {
     });
 
     it("finds matrix jobs that start with the job name", async () => {
-      const results = await subject.filterForRelevantJobDetails([
+      const mockJobList = [
         WorkflowJobFactory.generate({
           name: "Some Verbose Job Name (matrix1)"
         }),
@@ -231,21 +237,26 @@ describe("Consolidator", () => {
         WorkflowJobFactory.generate({ name: "Some Other Verbose Job Name (medium)" }),
         WorkflowJobFactory.generate({ name: "Some Other Verbose Job Name (large)" }),
         WorkflowJobFactory.generate({ name: "Some Other Job Name Without A Matrix" })
-      ]);
-      expect(Object.keys(results)).toEqual([
-        "Some Verbose Job Name (matrix1)",
-        "Some Verbose Job Name (matrix2)",
-        "Some Verbose Job Name (matrix3)",
-        "Some Verbose Job Name (matrix4)",
-        "Some Verbose Job Name (matrix5)",
-        "Some Other Verbose Job Name (small)",
-        "Some Other Verbose Job Name (medium)",
-        "Some Other Verbose Job Name (large)"
-      ]);
+      ];
+      const results = await subject.filterForRelevantJobDetails(mockJobList);
+      expect(results).toEqual({
+        some_job_name: {
+          [mockJobList[0].name]: mockJobList[0],
+          [mockJobList[1].name]: mockJobList[1],
+          [mockJobList[2].name]: mockJobList[2],
+          [mockJobList[3].name]: mockJobList[3],
+          [mockJobList[4].name]: mockJobList[4]
+        },
+        some_other_job_name: {
+          [mockJobList[5].name]: mockJobList[5],
+          [mockJobList[6].name]: mockJobList[6],
+          [mockJobList[7].name]: mockJobList[7]
+        }
+      });
     });
 
     it("does not find jobs that start with substrings", async () => {
-      const results = await subject.filterForRelevantJobDetails([
+      const mockJobList = [
         WorkflowJobFactory.generate({
           name: "Some Verbose Job Name (matrix1)"
         }),
@@ -270,13 +281,15 @@ describe("Consolidator", () => {
         WorkflowJobFactory.generate({
           name: "Some Other Job Name Without A Matrix"
         })
-      ]);
-      expect(Object.values(results).length).toEqual(3);
-      expect(Object.keys(results)).toEqual([
-        "Some Verbose Job Name (matrix1)",
-        "Some Verbose Job Name (matrix2)",
-        "Some Verbose Job Name (matrix3)"
-      ]);
+      ];
+      const results = await subject.filterForRelevantJobDetails(mockJobList);
+      expect(results).toEqual({
+        some_job_name: {
+          [mockJobList[0].name]: mockJobList[0],
+          [mockJobList[1].name]: mockJobList[1],
+          [mockJobList[2].name]: mockJobList[2]
+        }
+      });
     });
   });
 
@@ -288,14 +301,21 @@ describe("Consolidator", () => {
         ListWorkflowRunArtifactResponseFactory.generate();
       artifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
       const filteredArtifacts = {
-        "Some Verbose Job Name (1)": artifacts[0],
-        "Some Verbose Job Name (2)": artifacts[1],
-        "Some Verbose Job Name (3)": artifacts[2]
+        some_job_name: {
+          "Some Verbose Job Name (1)": artifacts[0],
+          "Some Verbose Job Name (2)": artifacts[1],
+          "Some Verbose Job Name (3)": artifacts[2]
+        },
+        some_other_job_name: {
+          "Some Other Verbose Job Name (uno)": artifacts[3],
+          "Some Other Verbose Job Name (dos)": artifacts[4],
+          "Some Other Verbose Job Name (tres)": artifacts[5]
+        }
       };
       jest
         .spyOn(subject, "jobArtifacts")
         .mockImplementation(
-          async (): Promise<{ [k: string]: ArtifactInfo | undefined }> =>
+          async (): Promise<{ [k: string]: { [k: string]: ArtifactInfo | undefined }}> =>
             filteredArtifacts
         );
       jest
@@ -308,6 +328,14 @@ describe("Consolidator", () => {
         .mockImplementation((filepath: string | undefined) => {
           return `Results for ${filepath}`;
         });
+
+      // jest
+      // .spyOn(subject, "readOutputs")
+      // .mockImplementation((filepath: string | undefined) => {
+      //   return _.mapValues(filteredArtifacts, (jobs) => {
+      //     return _.mapValues(jobs, (a: ArtifactInfo) => a?.id);
+      //   });
+      // });
     });
 
     it("renders the debug info, and formats the results as expected", async () => {
@@ -320,13 +348,38 @@ describe("Consolidator", () => {
               matrix: [1, 2, 3]
             }
           },
+          some_other_job_name: {
+            name: "Some Other Verbose Job Name",
+            strategy: {
+              matrix: "${{ some.github-interpolated.value }}"
+            }
+          },
+          some_job_name_without_a_matrix: {
+            name: "Some Other Job Name Without A Matrix"
+          },
           get_the_artifacts_as_outputs: {
             name: "Get the results of previous jobs",
-            needs: ["some_job_name"]
+            needs: [
+              "some_job_name",
+              "some_other_job_name",
+              "some_job_name_without_a_matrix"
+            ]
           }
         }
       };
 
+      const expectedResults = {
+        some_job_name: {
+          "Some Verbose Job Name (1)": `Results for path/to/${artifacts[0].id}`,
+          "Some Verbose Job Name (2)": `Results for path/to/${artifacts[1].id}`,
+          "Some Verbose Job Name (3)": `Results for path/to/${artifacts[2].id}`
+        },
+        some_other_job_name: {
+          "Some Other Verbose Job Name (uno)": `Results for path/to/${artifacts[3].id}`,
+          "Some Other Verbose Job Name (dos)": `Results for path/to/${artifacts[4].id}`,
+          "Some Other Verbose Job Name (tres)": `Results for path/to/${artifacts[5]?.id}`
+        }
+      };
       const coreDebugSpy = jest
         .spyOn(core, "debug")
         .mockImplementation((message) => message);
@@ -338,17 +391,9 @@ describe("Consolidator", () => {
       );
       expect(coreDebugSpy).toHaveBeenNthCalledWith(
         3,
-        `Found Artifacts ([${artifacts[0].id},${artifacts[1].id},${artifacts[2].id}])`
+        `Found Artifacts (${JSON.stringify(artifacts.slice(0, 6).map((a) => a?.id))})`
       );
-      expect(coreDebugSpy).toHaveBeenNthCalledWith(
-        4,
-        `Job Outputs: ${JSON.stringify({
-          "Some Verbose Job Name (1)": `Results for path/to/${artifacts[0].id}`,
-          "Some Verbose Job Name (2)": `Results for path/to/${artifacts[1].id}`,
-          "Some Verbose Job Name (3)": `Results for path/to/${artifacts[2].id}`
-        })}`
-      );
-      expect(result).not.toBeUndefined();
+      expect(result).toEqual(expectedResults);
     });
   });
 
@@ -410,10 +455,10 @@ describe("Consolidator", () => {
   describe("downloadFile", () => {
     it("calls the Axios library and resolves a promise with true", async () => {
       const mockedWriteStream = fs.createWriteStream("/dev/null");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockOn = jest
-        .spyOn(mockedWriteStream, "on")
-        .mockImplementation(
+      .spyOn(mockedWriteStream, "on")
+      .mockImplementation(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (event: string | symbol, listener: (...args: any[]) => void) => {
             if (event == "close") {
               listener();
@@ -421,9 +466,9 @@ describe("Consolidator", () => {
             return mockedWriteStream;
           }
         );
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const writeSpy = jest
+        const writeSpy = jest
         .spyOn(fs, "createWriteStream")
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         .mockImplementation((_) => mockedWriteStream);
       const mockPipe = jest.fn();
       const mockAdapter = new MockAdapter(axios);
@@ -460,9 +505,9 @@ describe("Consolidator", () => {
           }
         );
       const mockClose = jest.spyOn(mockedWriteStream, "close");
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const writeSpy = jest
-        .spyOn(fs, "createWriteStream")
+      .spyOn(fs, "createWriteStream")
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
         .mockImplementation((_) => mockedWriteStream);
       const mockPipe = jest.fn();
       const mockAdapter = new MockAdapter(axios);
