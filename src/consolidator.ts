@@ -85,11 +85,14 @@ export class Consolidator {
   /**
    * Get all jobs running within this workflow.
    */
-  getWorkflowJobs(run_id: number): Promise<JobInfo[]> {
-    return this.octokit.paginate(
+  async getWorkflowJobs(run_id: number): Promise<JobInfo[]> {
+    const jobs = await this.octokit.paginate(
       this.octokit.rest.actions.listJobsForWorkflowRun,
       { ...this.commonQueryParams(), run_id, filter: "all" }
     );
+    core.debug(`Total Jobs Found: ${jobs.length}`);
+    core.debug(`Job IDs: ${JSON.stringify(jobs.map((j) => j.id))}`);
+    return jobs;
   }
 
   /**
@@ -101,9 +104,11 @@ export class Consolidator {
       this.schema.jobs[this.context.job]?.needs
     );
     const thatUseMatrix = _.pickBy(dependsOnJobDefinitions, (job) => job.strategy?.matrix);
-    return _.mapValues(thatUseMatrix, (job: {name: string}) => {
+    const matchers = _.mapValues(thatUseMatrix, (job: {name: string}) => {
       return new RegExp(`^${job.name} \\(\\S+\\)$`);
     });
+    core.debug(`Job Name Matchers: ${JSON.stringify(matchers)}`);
+    return matchers;
   }
 
   /**
