@@ -326,16 +326,8 @@ describe("Consolidator", () => {
       jest
         .spyOn(subject, "readOutputs")
         .mockImplementation((filepath: string | undefined) => {
-          return `Results for ${filepath}`;
+          return JSON.stringify({summary: `Results for ${filepath}`});
         });
-
-      // jest
-      // .spyOn(subject, "readOutputs")
-      // .mockImplementation((filepath: string | undefined) => {
-      //   return _.mapValues(filteredArtifacts, (jobs) => {
-      //     return _.mapValues(jobs, (a: ArtifactInfo) => a?.id);
-      //   });
-      // });
     });
 
     it("renders the debug info, and formats the results as expected", async () => {
@@ -370,14 +362,14 @@ describe("Consolidator", () => {
 
       const expectedResults = {
         some_job_name: {
-          "Some Verbose Job Name (1)": `Results for path/to/${artifacts[0].id}`,
-          "Some Verbose Job Name (2)": `Results for path/to/${artifacts[1].id}`,
-          "Some Verbose Job Name (3)": `Results for path/to/${artifacts[2].id}`
+          "Some Verbose Job Name (1)": {summary: `Results for path/to/${artifacts[0].id}`},
+          "Some Verbose Job Name (2)": {summary: `Results for path/to/${artifacts[1].id}`},
+          "Some Verbose Job Name (3)": {summary: `Results for path/to/${artifacts[2].id}`},
         },
         some_other_job_name: {
-          "Some Other Verbose Job Name (uno)": `Results for path/to/${artifacts[3].id}`,
-          "Some Other Verbose Job Name (dos)": `Results for path/to/${artifacts[4].id}`,
-          "Some Other Verbose Job Name (tres)": `Results for path/to/${artifacts[5]?.id}`
+          "Some Other Verbose Job Name (uno)": {summary: `Results for path/to/${artifacts[3].id}`},
+          "Some Other Verbose Job Name (dos)": {summary: `Results for path/to/${artifacts[4].id}`},
+          "Some Other Verbose Job Name (tres)": {summary: `Results for path/to/${artifacts[5].id}`},
         }
       };
       const coreDebugSpy = jest

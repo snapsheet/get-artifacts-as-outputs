@@ -191,7 +191,8 @@ export class Consolidator {
       for (const jobTitle of Object.keys(artifacts)) {
         const artifact = artifacts[jobTitle];
         const artifactPath = await this.downloadArtifactFile(artifact?.id);
-        jobResults[jobKey][jobTitle] = this.readOutputs(artifactPath);
+        const output = this.readOutputs(artifactPath) || "null";
+        jobResults[jobKey][jobTitle] = JSON.parse(output);
       }
     }
     core.debug(`Job Outputs: ${JSON.stringify(jobResults)}`);
