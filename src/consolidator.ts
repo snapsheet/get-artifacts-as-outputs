@@ -103,8 +103,11 @@ export class Consolidator {
       this.schema.jobs,
       this.schema.jobs[this.context.job]?.needs
     );
-    const thatUseMatrix = _.pickBy(dependsOnJobDefinitions, (job) => job.strategy?.matrix);
-    const matchers = _.mapValues(thatUseMatrix, (job: {name: string}) => {
+    const thatUseMatrix = _.pickBy(
+      dependsOnJobDefinitions,
+      (job) => job.strategy?.matrix
+    );
+    const matchers = _.mapValues(thatUseMatrix, (job: { name: string }) => {
       return new RegExp(`^${job.name} \\(\\S+\\)$`);
     });
     core.debug(`Job Name Matchers: ${JSON.stringify(matchers)}`);
@@ -132,7 +135,7 @@ export class Consolidator {
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
     const artifacts = await this.octokit.paginate(
       this.octokit.rest.actions.listWorkflowRunArtifacts,
-      { ...this.commonQueryParams(), run_id: this.context.runId}
+      { ...this.commonQueryParams(), run_id: this.context.runId }
     );
     core.debug(`Total Artifacts Found: ${artifacts.length}`);
     core.debug(`Artifact IDs: ${JSON.stringify(artifacts.map((a) => a.id))}`);
@@ -146,12 +149,11 @@ export class Consolidator {
    */
   async filterForRelevantJobDetails(
     workflowJobs: JobInfo[]
-  ): Promise<{ [k: string]: { [k: string]: JobInfo } }> {
+  ): Promise<{ [k: string]: { [k: string]: JobInfo | undefined } }> {
     const jobsThatRan = workflowJobs.filter((job) => job.runner_id);
     const jobNameMatchers = this.dependsOnJobNameRegex();
     const orderedByRunAttempt = _.orderBy(jobsThatRan, "run_attempt", "desc");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const endResults = _.reduce(
+    const groupedByJobAndName = _.reduce(
       orderedByRunAttempt,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (result: any, job) => {
@@ -163,14 +165,19 @@ export class Consolidator {
         if (jobMatches) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const [matcherName, _matcher] = jobMatches;
-          result[matcherName] ||= {};
-          result[matcherName][job.name] = job;
+          result[matcherName][job.name] ||= [];
+          result[matcherName][job.name].push(job);
         }
         return result;
       },
-      {}
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      _.mapValues(jobNameMatchers, (_v) => new Object()) // start initialized with empty object
     );
-    return endResults;
+    const onlyLatestRun = _.mapValues(groupedByJobAndName, (_v) =>
+      _.mapValues(_v, (arr: JobInfo[]) => _.first(arr))
+    );
+
+    return onlyLatestRun;
   }
 
   /**
@@ -183,7 +190,10 @@ export class Consolidator {
 
     core.debug(
       `Found Artifacts (${JSON.stringify(
-        Object.values(jobArtifacts).map((obj) => Object.values(obj)).flat().map((a) => a?.id || "NULL")
+        Object.values(jobArtifacts)
+          .map((obj) => Object.values(obj))
+          .flat()
+          .map((a) => a?.id || "NULL")
       )})`
     );
 

@@ -288,7 +288,60 @@ describe("Consolidator", () => {
           [mockJobList[0].name]: mockJobList[0],
           [mockJobList[1].name]: mockJobList[1],
           [mockJobList[2].name]: mockJobList[2]
-        }
+        },
+        some_other_job_name: {}
+      });
+    });
+
+    it("chooses the latest job based on run attempt", async () => {
+      const mockJobList = [
+        WorkflowJobFactory.generate({
+          name: "Some Verbose Job Name (matrix1)",
+          run_attempt: 1,
+          runner_id: 12,
+          runner_name: "GitHub Actions 12",
+          runner_group_id: 2,
+          runner_group_name: "GitHub Actions"
+        }),
+        WorkflowJobFactory.generate({
+          name: "Some Verbose Job Name (matrix1)",
+          run_attempt: 2,
+          runner_id: 0,
+          runner_name: "",
+          runner_group_id: 0,
+          runner_group_name: ""
+        }),
+        WorkflowJobFactory.generate({
+          name: "Some Verbose Job Name (matrix1)",
+          run_attempt: 3,
+          runner_id: 31,
+          runner_name: "GitHub Actions 31",
+          runner_group_id: 2,
+          runner_group_name: "GitHub Actions"
+        }),
+        WorkflowJobFactory.generate({
+          name: "Some Verbose Job Name (matrix1)",
+          run_attempt: 4,
+          runner_id: 0,
+          runner_name: "",
+          runner_group_id: 0,
+          runner_group_name: ""
+        }),
+        WorkflowJobFactory.generate({
+          name: "Some Verbose Job Name (matrix1)",
+          run_attempt: 5,
+          runner_id: 20,
+          runner_name: "GitHub Actions 20",
+          runner_group_id: 2,
+          runner_group_name: "GitHub Actions"
+        }),
+      ];
+      const results = await subject.filterForRelevantJobDetails(mockJobList);
+      expect(results).toEqual({
+        some_job_name: {
+          [mockJobList[4].name]: mockJobList[4]
+        },
+        some_other_job_name: {}
       });
     });
   });
