@@ -60,9 +60,9 @@ jobs:
           output_filename: outputs.json
         # ...when this job's outputs are accessed, it will have the following format:
         # {
-        #   "first": { "summary": "first was successful" },
-        #   "second": { "summary": "second was successful" },
-        #   "third": { "summary": "third was successful" }
+        #   "Some Job (first)": { "summary": "it was a success" },
+        #   "Some Job (second)": { "summary": "somewhat of a success" },
+        #   "Some Job (third)": { "summary": "total failure" }
         # }
 
       - name: Generate Outputs
@@ -70,9 +70,9 @@ jobs:
         run: |
           echo '${{ steps.previous_jobs.outputs.generate_results }}' | jq -r 'keys[] as $k | "\($k) results: \(.[$k] | .summary)"'
         # (will print out the following)
-        # first results: first was successful
-        # second results: second was successful
-        # third results: third was successful
+        # Some Job (first): it was a success
+        # Some Job (second): somewhat of a success
+        # Some Job (third): total failure
 ```
 
 ### Dependencies
@@ -87,14 +87,16 @@ This project relies on having a GITHUB_TOKEN defined in the environment variable
 
 ### Outputs
 
-A JSON object, where each key-value pair has a key corresponding to the job name, and value representing the content of the file found in the artifact(s), read as strings.
+A JSON object, where each key-value pair has a key corresponding to the job name, and value representing the content of the file found in the artifact(s), read as strings. Each of them grouped under a key with the job key from the `needs` section.
 
 #### Example
 ```json
 {
-  "Some Job (1)": "{\"summary\": \"it was a success\" }",
-  "Some Job (2)": "{\"summary\": \"somewhat of a success\" }",
-  "Some Job (3)": "{\"summary\": \"total failure\" }"
+  "generate_results": {
+    "Some Job (first)": {"summary": "it was a success" },
+    "Some Job (second)": {"summary": "somewhat of a success" },
+    "Some Job (third)": {"summary": "total failure" }
+  }
 }
 ```
 
