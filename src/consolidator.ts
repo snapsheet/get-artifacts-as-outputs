@@ -148,41 +148,50 @@ export class Consolidator {
    * Get all jobs running within this workflow. An optional attempt number can be passed.
    */
   async getWorkflowJobs(run_id: number, attempt_number: number | null = null) {
-    let workflowJobs = null;
+    // Testing....  some of the job artifacts appear to be getting truncated.  This may be due to the pagination.
+    let jobs: JobInfo[] = [];
 
     if (attempt_number) {
-      workflowJobs =
-        await this.octokit.rest.actions.listJobsForWorkflowRunAttempt({
+      jobs = await this.octokit.paginate(
+        this.octokit.rest.actions.listJobsForWorkflowRunAttempt,
+        {
           ...this.commonQueryParams(),
           run_id,
           attempt_number
-        });
-      core.debug("listJobsForWorkflowRunAttempt");
-      core.debug(JSON.stringify(workflowJobs));
+        }
+      );
+      core.debug(`listJobsForWorkflowRunAttempt: Found ${jobs.length} jobs`);
     } else {
-      workflowJobs = await this.octokit.rest.actions.listJobsForWorkflowRun({
-        ...this.commonQueryParams(),
-        run_id
-      });
-      core.debug("listJobsForWorkflowRun");
-      core.debug(JSON.stringify(workflowJobs));
+      jobs = await this.octokit.paginate(
+        this.octokit.rest.actions.listJobsForWorkflowRun,
+        {
+          ...this.commonQueryParams(),
+          run_id
+        }
+      );
+      core.debug(`listJobsForWorkflowRun: Found ${jobs.length} jobs`);
+      core.debug(JSON.stringify(jobs));
     }
 
-    return workflowJobs.data.jobs;
+    return jobs;
   }
 
   /**
    * Get all artifacts associated with this run.
    */
   async getRunArtifacts(): Promise<ArtifactInfo[]> {
-    const response = await this.octokit.rest.actions.listWorkflowRunArtifacts({
-      ...this.commonQueryParams(),
-      run_id: this.context.runId
-    });
-    core.debug("listWorkflowRunArtifacts");
-    core.debug(JSON.stringify(response));
+    // Use paginate to get all artifacts, not just the first page
+    const artifacts = await this.octokit.paginate(
+      this.octokit.rest.actions.listWorkflowRunArtifacts,
+      {
+        ...this.commonQueryParams(),
+        run_id: this.context.runId
+      }
+    );
+    core.debug(`listWorkflowRunArtifacts: Found ${artifacts.length} artifacts`);
+    core.debug(JSON.stringify(artifacts));
 
-    return response.data.artifacts;
+    return artifacts;
   }
 
   /**
