@@ -54,9 +54,14 @@ export class Consolidator {
    */
   async run() {
     this.schema = await this.getWorkflowSchema();
+    // Fetch artifacts initially, but we'll refetch for each job to ensure we have the latest
     this.artifacts = await this.getRunArtifacts();
 
     for (const jobName of this.schema.jobs[this.context.job].needs) {
+      // Refetch artifacts for each job to ensure we have the latest list
+      // (artifacts might still be uploading from previous jobs)
+      this.artifacts = await this.getRunArtifacts();
+      
       const currentWorkflowJobs = await this.getRelevantWorkflowJobs(
         jobName,
         this.context.runId
@@ -65,6 +70,31 @@ export class Consolidator {
         jobName,
         currentWorkflowJobs
       );
+      
+      // Check if all jobs have artifacts, and retry fetching artifacts if some are missing
+      let missingArtifacts = lastRanWorkflows.filter(
+        (job) => !this.artifacts.find((a) => a.name == job.id.toString())
+      );
+      
+      // Retry up to 3 times if we're missing artifacts (artifacts might still be uploading)
+      let retryCount = 0;
+      const maxRetries = 3;
+      while (
+        missingArtifacts.length > 0 &&
+        missingArtifacts.length < lastRanWorkflows.length &&
+        retryCount < maxRetries
+      ) {
+        core.debug(
+          `Missing ${missingArtifacts.length} artifacts for ${jobName} (attempt ${retryCount + 1}/${maxRetries}), waiting 5 seconds and refetching...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        this.artifacts = await this.getRunArtifacts();
+        missingArtifacts = lastRanWorkflows.filter(
+          (job) => !this.artifacts.find((a) => a.name == job.id.toString())
+        );
+        retryCount++;
+      }
+      
       const jobOutputs = await this.getJobOutputs(lastRanWorkflows);
       core.setOutput(jobName, JSON.stringify(jobOutputs));
     }
@@ -212,18 +242,49 @@ export class Consolidator {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getJobOutputs(jobDetails: JobInfo[]): Promise<{ [k: string]: any }> {
+    core.debug(
+      `Processing ${jobDetails.length} jobs, ${this.artifacts.length} total artifacts available`
+    );
+
+    // Track which jobs have artifacts and which don't
+    const jobsWithArtifacts: string[] = [];
+    const jobsWithoutArtifacts: string[] = [];
+    const artifactNames = this.artifacts.map((a) => a.name);
+
     // create a data structure with the job name and associated artifact
     const jobArtifacts: { [k: string]: ArtifactInfo } = Object.fromEntries(
       new Map(
         jobDetails
-          .map((job) => [
-            job.name,
-            this.artifacts.find((a) => a.name == job.id.toString())
-          ])
+          .map((job) => {
+            const artifact = this.artifacts.find(
+              (a) => a.name == job.id.toString()
+            );
+            if (artifact) {
+              jobsWithArtifacts.push(job.name);
+            } else {
+              jobsWithoutArtifacts.push(
+                `${job.name} (job_id: ${job.id}, looking for artifact named "${job.id}")`
+              );
+            }
+            return [job.name, artifact];
+          })
           .filter((e) => e[1] != undefined) as [string, ArtifactInfo][] // needed because the transcompiler can't tell we're filtering out undefined
       )
     );
 
+    core.debug(
+      `Found ${jobsWithArtifacts.length} jobs with artifacts, ${jobsWithoutArtifacts.length} jobs without artifacts`
+    );
+    if (jobsWithoutArtifacts.length > 0) {
+      core.debug(
+        `Jobs without artifacts: ${JSON.stringify(jobsWithoutArtifacts)}`
+      );
+      core.debug(
+        `Available artifact names (first 20): ${JSON.stringify(
+          artifactNames.slice(0, 20)
+        )}`
+      );
+    }
     core.debug(
       `Found Artifacts (${JSON.stringify(
         Object.values(jobArtifacts).map((a) => a.id)
