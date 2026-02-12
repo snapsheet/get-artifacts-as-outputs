@@ -1,7 +1,7 @@
 {
   "name": "get-artifacts-as-outputs",
   "description": "Get GitHub Artifacts as Job Outputs",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "author": "@snapsheet",
   "private": true,
   "homepage": "https://github.com/snapsheet/get-artifacts-as-outputs",
