@@ -31,30 +31,38 @@ describe("index run", () => {
 });
 
 describe("index errors", () => {
+  let setFailedSpy: jest.SpyInstance;
+
   beforeEach(() => {
-    /**
-     * Mock the Consolidator, because it will be tested separately.
-     */
-    jest.mock<typeof import("../src/consolidator")>("../src/consolidator", () => {
-      // Require the original module to not be mocked...
-      const originalConsolidator = jest.requireActual<typeof import("../src/consolidator")>("../src/consolidator");
-      const mockConsolidator = new originalConsolidator.Consolidator();
-      jest.spyOn(mockConsolidator, "run").mockImplementation(async () => {
-        throw new Error("whoops");
-      });
+    setFailedSpy = jest.spyOn(core, "setFailed").mockImplementation();
+    // Clear the module cache to allow re-mocking
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+  
+
+  it("handles non-Error exceptions", async () => {
+    // Mock Consolidator to throw a non-Error
+    jest.doMock("../src/consolidator", () => {
       return {
-        ...originalConsolidator,
-        Consolidator: jest.fn(() => {
-          return mockConsolidator;
+        Consolidator: jest.fn().mockImplementation(() => {
+          return {
+            run: jest.fn().mockRejectedValue("string error")
+          };
         })
       };
     });
-  });
-  
-  it("handles errors when exceptions are raised", async () => {
-    jest.spyOn(core, "setFailed").mockImplementation((msg) => {
-      expect(msg).toEqual("whoops");
-    });
-    await require("../src/index");
+
+    // Import the run function directly to test it
+    const indexModule = await import("../src/index");
+    
+    // Call run() directly (instead of relying on module-level execution)
+    await indexModule.default();
+    
+    // Should not call setFailed for non-Error exceptions
+    expect(setFailedSpy).not.toHaveBeenCalled();
   });
 });

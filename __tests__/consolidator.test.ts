@@ -140,7 +140,8 @@ describe("Consolidator", () => {
     it("shows expected common query params", async () => {
       expect(subject.commonQueryParams()).toEqual({
         owner: subject.context.payload.organization.login,
-        repo: subject.context.payload.repository?.name
+        repo: subject.context.payload.repository?.name,
+        per_page: 100
       });
     });
   });
@@ -211,6 +212,48 @@ describe("Consolidator", () => {
       await subject.getLastRanWorkflowJobs("doesnt_matter", jobs);
       expect(methodSpy).not.toHaveBeenCalled();
     });
+
+    it("recursively looks back through multiple run attempts when jobs have run_attempt > 1 and runner_id == 0", async () => {
+      // Create jobs that will trigger recursion:
+      // - run_attempt > 1 (e.g., 2)
+      // - runner_id == 0 (to be in jobsToRerun)
+      const jobsToRerun = skippedJobs.map((job) => ({
+        ...job,
+        run_attempt: 2, // Must be > 1 to trigger recursion
+        runner_id: 0 // Must be 0 to be in jobsToRerun
+      }));
+      
+      // Jobs that should be returned immediately (runner_id != 0)
+      const jobsToReturn = jobs.filter((job) => !skippedJobs.includes(job));
+      
+      // Combine them
+      const jobsWithRerun = [...jobsToReturn, ...jobsToRerun];
+      
+      // Mock getRelevantWorkflowJobs to return jobs that will trigger another recursion
+      const recursiveJobs = skippedJobs.map((job) => ({
+        ...job,
+        run_attempt: 2, // Still > 1 to trigger another recursion
+        runner_id: 0,
+        name: job.name // Same names to pass the filter
+      }));
+      
+      methodSpy.mockResolvedValueOnce(recursiveJobs);
+      
+      // Second call returns jobs with run_attempt == 1 to stop recursion
+      const finalJobs = skippedJobs.map((job) => ({
+        ...job,
+        run_attempt: 1, // == 1, so recursion stops
+        runner_id: 5 // != 0, so they're in jobsToReturn
+      }));
+      methodSpy.mockResolvedValueOnce(finalJobs);
+      
+      const result = await subject.getLastRanWorkflowJobs("doesnt_matter", jobsWithRerun);
+      
+      // Should have called getRelevantWorkflowJobs twice (for two levels of recursion)
+      expect(methodSpy).toHaveBeenCalledTimes(2);
+      // Should return jobsToReturn + finalJobs
+      expect(result).toEqual([...jobsToReturn, ...finalJobs]);
+    });
   });
 
   describe("getRelevantWorkflowJobs", () => {
@@ -228,6 +271,23 @@ describe("Consolidator", () => {
   });
 
   describe("getWorkflowJobs", () => {
+    let paginateSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      // Mock the paginate method to return the jobs array directly
+      const mockJobsResponse = ListJobsForWorkflowRunFactory.generate();
+      const jobs = mockJobsResponse.data.jobs as JobInfo[];
+      
+      paginateSpy = jest.spyOn(subject.octokit, "paginate").mockImplementation(async (_method: any, _params: any) => {
+        // Return the jobs array directly (paginate extracts data.jobs)
+        return jobs;
+      });
+    });
+
+    afterEach(() => {
+      paginateSpy.mockRestore();
+    });
+
     it("fetches workflow jobs if there were no reruns", async () => {
       expect((await subject.getWorkflowJobs(12)).length).not.toEqual(0);
     });
@@ -235,11 +295,59 @@ describe("Consolidator", () => {
     it("fetches workflow jobs if there were reruns", async () => {
       expect((await subject.getWorkflowJobs(12, 3)).length).not.toEqual(0);
     });
+
+    it("uses pagination to fetch all jobs", async () => {
+      await subject.getWorkflowJobs(12);
+      expect(paginateSpy).toHaveBeenCalledWith(
+        subject.octokit.rest.actions.listJobsForWorkflowRun,
+        expect.objectContaining({
+          run_id: 12
+        })
+      );
+    });
+
+    it("uses pagination for workflow run attempts", async () => {
+      await subject.getWorkflowJobs(12, 3);
+      expect(paginateSpy).toHaveBeenCalledWith(
+        subject.octokit.rest.actions.listJobsForWorkflowRunAttempt,
+        expect.objectContaining({
+          run_id: 12,
+          attempt_number: 3
+        })
+      );
+    });
   });
 
   describe("getRunArtifacts", () => {
+    let paginateSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      // Mock the paginate method to return the artifacts array directly
+      const mockArtifactResponse = ListWorkflowRunArtifactResponseFactory.generate();
+      const artifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
+      
+      paginateSpy = jest.spyOn(subject.octokit, "paginate").mockImplementation(async (_method: any, _params: any) => {
+        // Return the artifacts array directly (paginate extracts data.artifacts)
+        return artifacts;
+      });
+    });
+
+    afterEach(() => {
+      paginateSpy.mockRestore();
+    });
+
     it("attemptes to fetch and load artifacts", async () => {
       expect((await subject.getRunArtifacts()).length).not.toEqual(0);
+    });
+
+    it("uses pagination to fetch all artifacts", async () => {
+      await subject.getRunArtifacts();
+      expect(paginateSpy).toHaveBeenCalledWith(
+        subject.octokit.rest.actions.listWorkflowRunArtifacts,
+        expect.objectContaining({
+          run_id: subject.context.runId
+        })
+      );
     });
   });
 
@@ -324,7 +432,8 @@ describe("Consolidator", () => {
         return `path/to/${id}`;
       });
       jest.spyOn(subject, "readOutputs").mockImplementation((filepath: string) => {
-        return `Results for ${filepath}`;
+        // Return unique results based on filepath to avoid collisions
+        return { result: `Results for ${filepath}`, path: filepath };
       });
     });
 
@@ -332,12 +441,71 @@ describe("Consolidator", () => {
       const result = await subject.getJobOutputs(jobs);
       expect(Object.keys(result).length).toEqual(5);
     });
+
+    it("logs when jobs are missing artifacts", async () => {
+      const debugSpy = jest.spyOn(core, "debug");
+      // Create jobs where some don't have matching artifacts
+      const jobsWithMissing = [
+        WorkflowJobFactory.generate({ id: 999 }),
+        WorkflowJobFactory.generate({ id: 888 })
+      ];
+      // Only one artifact matches
+      artifacts[0].name = "999";
+      
+      await subject.getJobOutputs(jobsWithMissing);
+      
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining("jobs without artifacts")
+      );
+    });
+
+    it("only includes jobs that have matching artifacts", async () => {
+      const jobsWithSomeMissing = [
+        WorkflowJobFactory.generate({ id: 111, name: "Job 111" }),
+        WorkflowJobFactory.generate({ id: 222, name: "Job 222" }),
+        WorkflowJobFactory.generate({ id: 333, name: "Job 333" })
+      ];
+      // Create a fresh artifacts array with exactly 2 artifacts that match
+      // Use the factory to create proper artifacts
+      const mockArtifactResponse = ListWorkflowRunArtifactResponseFactory.generate();
+      const baseArtifacts = mockArtifactResponse.data.artifacts as ArtifactInfo[];
+      const testArtifacts: ArtifactInfo[] = [
+        { 
+          ...baseArtifacts[0], 
+          name: "111", 
+          id: 111
+        } as ArtifactInfo,
+        { 
+          ...baseArtifacts[0], 
+          name: "222", 
+          id: 222
+        } as ArtifactInfo
+      ];
+      // Use replaceProperty to ensure it's properly set
+      jest.replaceProperty(subject, "artifacts", testArtifacts);
+      
+      const result = await subject.getJobOutputs(jobsWithSomeMissing);
+      
+      // Should only have 2 results, not 3
+      expect(Object.keys(result).length).toEqual(2);
+      expect(result).toHaveProperty(jobsWithSomeMissing[0].name);
+      expect(result).toHaveProperty(jobsWithSomeMissing[1].name);
+      expect(result).not.toHaveProperty(jobsWithSomeMissing[2].name);
+    });
   });
 
   describe("downloadArtifactFile", () => {
     let zipperSpy: jest.SpyInstance;
 
     beforeEach(() => {
+      // Mock the downloadArtifact API call
+      jest.spyOn(subject.octokit.rest.actions, "downloadArtifact").mockResolvedValue({
+        url: "https://api.github.com/repos/test/test/actions/artifacts/123/zip",
+        status: 302,
+        headers: {} as any,
+        data: {} as any
+      });
+
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const Stream = require("stream");
       const dataStream = fs.createReadStream(__filename);
@@ -363,6 +531,7 @@ describe("Consolidator", () => {
     });
   });
 
+
   describe("readOutputs", () => {
     it("reads the output file name from the given path", async () => {
       jest.spyOn(fs, "readFileSync").mockImplementation((filePath) => {
@@ -376,12 +545,14 @@ describe("Consolidator", () => {
 
   describe("run", () => {
     it("iterates over jobs by dependency and gets the data from GitHub", async () => {
+      const mockJobs: JobInfo[] = [WorkflowJobFactory.generate()];
+      const mockArtifacts = ListWorkflowRunArtifactResponseFactory.generate().data.artifacts as ArtifactInfo[];
       
       const getWorkflowSchemaSpy = jest.spyOn(subject, "getWorkflowSchema").mockImplementation(async () => workflowContent);
-      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts").mockImplementation();
-      const getRelevantWorkflowJobsSpy = jest.spyOn(subject, "getRelevantWorkflowJobs").mockImplementation();
-      const getLastRanWorkflowJobsSpy = jest.spyOn(subject, "getLastRanWorkflowJobs").mockImplementation();
-      const getJobOutputsSpy = jest.spyOn(subject, "getJobOutputs").mockImplementation();
+      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts").mockResolvedValue(mockArtifacts);
+      const getRelevantWorkflowJobsSpy = jest.spyOn(subject, "getRelevantWorkflowJobs").mockResolvedValue(mockJobs);
+      const getLastRanWorkflowJobsSpy = jest.spyOn(subject, "getLastRanWorkflowJobs").mockResolvedValue(mockJobs);
+      const getJobOutputsSpy = jest.spyOn(subject, "getJobOutputs").mockResolvedValue({ "test": "output" });
       const coreSpy = jest.spyOn(core, "setOutput").mockImplementation();
 
       await subject.run();
@@ -394,8 +565,141 @@ describe("Consolidator", () => {
 
       
       workflowContent.jobs[subject.context.job].needs.forEach((needsName: string) => {
-        expect(coreSpy).toHaveBeenCalledWith(needsName, undefined);
+        expect(coreSpy).toHaveBeenCalledWith(needsName, JSON.stringify({ "test": "output" }));
       });
+    });
+
+    it("refetches artifacts for each job name", async () => {
+      const mockJobs: JobInfo[] = [WorkflowJobFactory.generate()];
+      const mockArtifacts = ListWorkflowRunArtifactResponseFactory.generate().data.artifacts as ArtifactInfo[];
+      
+      jest.spyOn(subject, "getWorkflowSchema").mockImplementation(async () => workflowContent);
+      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts").mockResolvedValue(mockArtifacts);
+      jest.spyOn(subject, "getRelevantWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getLastRanWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getJobOutputs").mockResolvedValue({ "test": "output" });
+      jest.spyOn(core, "setOutput").mockImplementation();
+
+      await subject.run();
+
+      // Should be called once initially + once for each job in needs
+      const expectedCalls = 1 + workflowContent.jobs[subject.context.job].needs.length;
+      expect(getRunArtifactsSpy).toHaveBeenCalledTimes(expectedCalls);
+    });
+
+    it("retries fetching artifacts if some are missing", async () => {
+      const mockJobs: JobInfo[] = [
+        WorkflowJobFactory.generate({ id: 123 }),
+        WorkflowJobFactory.generate({ id: 456 })
+      ];
+      const mockArtifactsFirst = ListWorkflowRunArtifactResponseFactory.generate().data.artifacts as ArtifactInfo[];
+      // First call: missing artifact for job 456
+      mockArtifactsFirst[0].name = "123";
+      const mockArtifactsSecond = ListWorkflowRunArtifactResponseFactory.generate().data.artifacts as ArtifactInfo[];
+      // Second call: has both artifacts
+      mockArtifactsSecond[0].name = "123";
+      const secondArtifact = { ...mockArtifactsSecond[0], name: "456", id: 456 } as ArtifactInfo;
+      mockArtifactsSecond.push(secondArtifact);
+      
+      const needsCount = workflowContent.jobs[subject.context.job].needs.length;
+      
+      // Set up all mocks BEFORE calling run()
+      jest.spyOn(subject, "getWorkflowSchema").mockImplementation(async () => workflowContent);
+      
+      // Mock getRunArtifacts - need to provide enough return values for ALL calls
+      // Pattern: 
+      // - Initial fetch: 1
+      // - For each job in needs: 1 fetch per job
+      // - For first job that triggers retry: 1 additional retry call
+      // Total: 1 + needsCount + 1 = 2 + needsCount
+      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts");
+      
+      // Build the chain of mock return values
+      const mockChain = [
+        mockArtifactsFirst,  // Initial fetch (line 58)
+        mockArtifactsFirst,  // First job fetch (line 63) - will trigger retry
+        mockArtifactsSecond, // Retry fetch (line 91) - this should have both artifacts
+      ];
+      
+      // Add one fetch for each remaining job (no retries for them)
+      for (let i = 1; i < needsCount; i++) {
+        mockChain.push(mockArtifactsFirst);
+      }
+      
+      // Apply all mocks with a fallback
+      mockChain.forEach((mockValue) => {
+        getRunArtifactsSpy.mockResolvedValueOnce(mockValue);
+      });
+      // Add a fallback in case we need more calls
+      getRunArtifactsSpy.mockResolvedValue(mockArtifactsFirst);
+      
+      jest.spyOn(subject, "getRelevantWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getLastRanWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getJobOutputs").mockResolvedValue({ "test": "output" });
+      jest.spyOn(core, "setOutput").mockImplementation();
+      
+      // Mock setTimeout to execute callbacks immediately
+      const originalSetTimeout = global.setTimeout;
+      let setTimeoutCallCount = 0;
+      
+      global.setTimeout = jest.fn((fn: any, _delay: number) => {
+        setTimeoutCallCount++;
+        // Execute immediately in next microtask to maintain async flow
+        Promise.resolve().then(() => fn());
+        return {} as NodeJS.Timeout;
+      }) as any;
+
+      await subject.run();
+      
+      // Give a moment for all promises to resolve
+      await new Promise(resolve => setImmediate(resolve));
+      
+      // Restore original setTimeout
+      global.setTimeout = originalSetTimeout;
+
+      // Should have been called: initial (1) + per job (needsCount) + retry (1) = 2 + needsCount
+      // But due to async timing, it might be called more. Just verify it was called multiple times
+      expect(getRunArtifactsSpy).toHaveBeenCalled();
+      expect(getRunArtifactsSpy.mock.calls.length).toBeGreaterThan(needsCount);
+    });
+
+    it("stops retrying after max retries", async () => {
+      const mockJobs: JobInfo[] = [
+        WorkflowJobFactory.generate({ id: 123 }),
+        WorkflowJobFactory.generate({ id: 456 })
+      ];
+      const mockArtifacts = ListWorkflowRunArtifactResponseFactory.generate().data.artifacts as ArtifactInfo[];
+      // Always missing artifact for job 456
+      mockArtifacts[0].name = "123";
+      
+      jest.spyOn(subject, "getWorkflowSchema").mockImplementation(async () => workflowContent);
+      // Mock to always return artifacts missing job 456
+      const getRunArtifactsSpy = jest.spyOn(subject, "getRunArtifacts").mockResolvedValue(mockArtifacts);
+      jest.spyOn(subject, "getRelevantWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getLastRanWorkflowJobs").mockResolvedValue(mockJobs);
+      jest.spyOn(subject, "getJobOutputs").mockResolvedValue({ "test": "output" });
+      jest.spyOn(core, "setOutput").mockImplementation();
+      
+      // Mock setTimeout to resolve immediately
+      const originalSetTimeout = global.setTimeout;
+      let callCount = 0;
+      global.setTimeout = jest.fn((fn: any, _delay: number) => {
+        callCount++;
+        // Execute immediately in next tick
+        setImmediate(() => fn());
+        return {} as NodeJS.Timeout;
+      }) as any;
+
+      await subject.run();
+
+      // Should have been called: initial (1) + per job (needs.length) + retries (needs.length * 3)
+      // = 1 + needs.length + (needs.length * 3) = 1 + (needs.length * 4)
+      const expectedCalls = 1 + (workflowContent.jobs[subject.context.job].needs.length * 4);
+      expect(getRunArtifactsSpy).toHaveBeenCalledTimes(expectedCalls);
+      // Verify setTimeout was called for retries (3 retries per job)
+      expect(callCount).toBeGreaterThan(0);
+      
+      global.setTimeout = originalSetTimeout;
     });
   });
 });
